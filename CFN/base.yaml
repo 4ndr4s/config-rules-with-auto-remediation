@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Config rules
+
+Parameters:
+  cfnTemplatesBucketURL:
+    Type: String
+    Default: "https://s3.amazonaws.com/fta-cloudformation-templates-us-east-1"
+    Description: S3 Bucket URL containing CFN templates e.g. https://<name>.s3.amazonaws.com/<AWS_REGION>/<VERSION>
+
+Resources:
+
+  cfnStackRDSTwo:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "RDS_2.yaml"] ]
+      TimeoutInMinutes: 10
