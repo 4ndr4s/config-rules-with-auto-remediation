@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Config rule for SSH and RDP
+
+Parameters:
+  AutomationRoleName:
+    Type: String
+    Default: "FTA-ConfigAutoRemediation"
+    Description: role Name
+
+Resources:
+  AWSConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: rds-instance-public-access-check
+      Description: Checks if the Amazon Relational Database Service (Amazon RDS) instances are not publicly accessible. The rule is NON_COMPLIANT if the publiclyAccessible field is true in the instance configuration item.
+      Scope: 
+        ComplianceResourceTypes: 
+          - AWS::RDS::DBInstance
+      Source:
+          Owner: AWS
+          SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
+  ConfigAutoremediation:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref AWSConfigRule
+      MaximumAutomaticAttempts: 3
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: 
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        GroupId:
+          ResourceValue:
+            Value: RESOURCE_ID
+      RetryAttemptSeconds: 30
+      TargetId: AWSConfigRemediation-DisablePublicAccessToRDSInstance
+      TargetType: "SSM_DOCUMENT"
+
+
