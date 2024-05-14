@@ -15,9 +15,17 @@ In order to enable AWS Config rule with autoremediation please follow below proc
     - Type in the search field to filter the list of managed rules by rule name, description, and label. For example, type EC2 to return rules that evaluate EC2 resource types or type periodic to return rules that are triggered periodically.
 
 - On the Configure rule page, copy Managed rule name. For example RDS_INSTANCE_PUBLIC_ACCESS_CHECK you will need that to replace it in 
-- For Name, use an unique name for the rule and replace it in.
+- For Name, use an unique name for the rule and replace it in the new yaml on line [ConfigRuleName](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L14).
 - For Description, add a description for the rule.
-- Each rule has different properties and even input parameters in order to identify those use the S3 template link, replace THE_RULE_IDENTIFIER with Managed rule name http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/THE_RULE_IDENTIFIER.template. For example: http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/RDS_INSTANCE_PUBLIC_ACCESS_CHECK.template
+- Each rule has different properties and input parameters in order to identify those use the S3 template link, replace THE_RULE_IDENTIFIER with Managed rule name http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/THE_RULE_IDENTIFIER.template. For example: http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/RDS_INSTANCE_PUBLIC_ACCESS_CHECK.template. replace [ComplianceResourceTypes](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L14) with the scope required for the rule.
+
+#### Note  
+
+| :exclamation: NOTE          |
+|:---------------------------|
+| **Any other parameter required for the rule needs to be added to the yaml file..** |
+
+|-----------------------------------------|
 
 ### Auto Remediation
 
@@ -28,7 +36,7 @@ To enable autoremediation follow below procedure:
 - In the left navigation menu, click on Automation under Change management.
 - Click on Execute automation.
 - On the Automation runbook search bar filter by the document you need for your Config Rule.
-- Copy the document name. For example AWSConfigRemediation-DisablePublicAccessToRDSInstance and replace it in [rule.yaml.template]()
+- Copy the document name. For example AWSConfigRemediation-DisablePublicAccessToRDSInstance and replace it in [TargetId](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L37) in the yaml file.
 
 
 
