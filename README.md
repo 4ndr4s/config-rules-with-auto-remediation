@@ -1,6 +1,8 @@
 # Org AWS config Rules
 
-
+| :exclamation: Single Account Test          |
+|:---------------------------|
+| **In order to manually test a single rule in a single region follow AWS documentation https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_manage-rules.html. this is recommended before implementing the rule at Org Level.** |
 
 ## Config Rule
 
