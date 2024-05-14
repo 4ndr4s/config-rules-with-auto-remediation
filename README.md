@@ -19,7 +19,6 @@ In order to enable AWS Config rule with autoremediation please follow below proc
 - For Description, add a description for the rule.
 - Each rule has different properties and input parameters in order to identify those use the S3 template link, replace THE_RULE_IDENTIFIER with Managed rule name http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/THE_RULE_IDENTIFIER.template. For example: http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/RDS_INSTANCE_PUBLIC_ACCESS_CHECK.template. replace [ComplianceResourceTypes](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L14) with the scope required for the rule.
 
-#### Note  
 
 | :exclamation: NOTE          |
 |:---------------------------|
