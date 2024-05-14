@@ -41,3 +41,4 @@ To enable autoremediation follow below procedure:
 ## Useful Documents
 
 - [Implement AWS Config rule remediation with Systems Manager Change Manager](https://aws.amazon.com/blogs/mt/implement-aws-config-rule-remediation-with-systems-manager-change-manager/)
+- [Creating AWS Config Managed Rules With AWS CloudFormation Templates](https://docs.aws.amazon.com/config/latest/developerguide/aws-config-managed-rules-cloudformation-templates.html)
