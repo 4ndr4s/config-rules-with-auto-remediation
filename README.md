@@ -24,7 +24,6 @@ In order to enable AWS Config rule with autoremediation please follow below proc
 |:---------------------------|
 | **Any other parameter required for the rule needs to be added to the yaml file..** |
 
-|-----------------------------------------|
 
 ### Auto Remediation
 
