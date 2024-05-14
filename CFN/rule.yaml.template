@@ -11,14 +11,14 @@ Resources:
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: rds-instance-public-access-check
-      Description: Checks if the Amazon Relational Database Service (Amazon RDS) instances are not publicly accessible. The rule is NON_COMPLIANT if the publiclyAccessible field is true in the instance configuration item.
+      ConfigRuleName: <Name>
+      Description: <Description>
       Scope: 
         ComplianceResourceTypes: 
-          - AWS::RDS::DBInstance
+          - <Compliance resources>
       Source:
           Owner: AWS
-          SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
+          SourceIdentifier: <Managed Rule Name>
   ConfigAutoremediation:
     Type: AWS::Config::RemediationConfiguration
     Properties:
@@ -30,11 +30,9 @@ Resources:
           StaticValue:
             Values: 
               - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
-        DbiResourceId:
+        <Resource to evaluate>:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
-      TargetId: AWSConfigRemediation-DisablePublicAccessToRDSInstance
+      TargetId: <SSM Document Name>
       TargetType: "SSM_DOCUMENT"
-
-
