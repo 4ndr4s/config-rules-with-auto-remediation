@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Config rule for SSH and RDP
+
+Parameters:
+  AutomationRoleName:
+    Type: String
+    Default: "FTA-ConfigAutoRemediation"
+    Description: role Name
+  TopicArn:
+    Type: String
+    Default: "arn:aws:sns:us-east-1:412090077236:FTA-Sec-Tooling-SNS-topic"
+    Description: topic ARN on Security Tooling
+
+Resources:
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  # [EC2.14] Security groups should not allow ingress from 0.0.0.0/0 or ::/0 to port 3389
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  DisablePublicAccessForSecurityGroup:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Name: FTA-DisablePublicAccessForSecurityGroup
+      Content:
+        description: >-
+          ## Disable RDP ports opened to IP address specified,
+           or to all addresses if no address is specified. 
+           Similar to the [RevokeSecurityGroupIngress](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RevokeSecurityGroupIngress.html) API, 
+           the security group must have existing rules specifically on the SSH and RDP ports in order for ingress to be disabled.
+        schemaVersion: '0.3'
+        assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        parameters:
+          AutomationAssumeRole:
+            type: String
+            default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+          GroupId:
+            type: String
+            description: (Required) Security Group ID
+            allowedPattern: ^([s][g]\-)([0-9a-f]){1,}$
+          IpAddressToBlock:
+            type: String
+            description: (Optional) Additional Ipv4 or Ipv6 address to block access from (ex:1.2.3.4/32)
+            allowedPattern: (^$)|^((25[0-5]|(2[0-4]\d|[0-1]?\d?\d)(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3})|(^((?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?)::((?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?))|(^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}))\/(25[0-5]|2[0-4]\d|[0-1]?\d?\d)$
+            default: ""
+          TopicArn:
+            type: String
+            description: (Required) The ARN of the SNS topic to publish the notification to.
+          Message:
+            type: String
+            description: (Required) The message to include in the SNS notification.
+        mainSteps:
+          - name: CustomIpCheck
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: DisableRDPFromIpV6
+                And:
+                  - Not:
+                      Variable: "{{IpAddressToBlock}}"
+                      StringEquals: ""
+                  - Variable: "{{ IpAddressToBlock }}"
+                    Contains: ":"
+              - NextStep: DisableRDPFromIpV4
+                And:
+                  - Not:
+                      Variable: "{{IpAddressToBlock}}"
+                      StringEquals: ""
+                  - Not:
+                      Variable: "{{ IpAddressToBlock }}"
+                      Contains: ":"
+              Default:
+                DisableRDPFromIpV4
+          - name: DisableRDPFromIpV4
+            action: "aws:executeAwsApi"
+            inputs:
+              Service: ec2
+              Api: RevokeSecurityGroupIngress
+              GroupId: "{{GroupId}}"
+              IpPermissions:
+                - IpProtocol: tcp
+                  FromPort: 3389
+                  ToPort: 3389
+                  IpRanges:
+                    - CidrIp: 0.0.0.0/0
+            onFailure: Continue
+          - name: DisableRDPFromIpV6
+            action: "aws:executeAwsApi"
+            inputs:
+              Service: ec2
+              Api: RevokeSecurityGroupIngress
+              GroupId: "{{GroupId}}"
+              IpPermissions:
+                - IpProtocol: tcp
+                  FromPort: 3389
+                  ToPort: 3389
+                  Ipv6Ranges:
+                    - CidrIpv6: "::/0"
+            onFailure: Continue
+          - name: PublishSNSNotification
+            action: aws:executeAwsApi
+            inputs:
+              Service: sns
+              Api: Publish
+              TopicArn: "{{TopicArn}}"
+              Message: "{{Message}}, {{GroupId}}"
+            isEnd: true
+  AWSConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: FTA-RestrictRDPPublicAccess
+      Description: Restrict public access to 3389 port
+      InputParameters:
+        blockedPort1: 3389
+      Scope: 
+        ComplianceResourceTypes: 
+          - AWS::EC2::SecurityGroup
+      Source:
+          Owner: AWS
+          SourceIdentifier: RESTRICTED_INCOMING_TRAFFIC
+  ConfigAutoremediation:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref AWSConfigRule
+      MaximumAutomaticAttempts: 3
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: 
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        TopicArn:
+          StaticValue:
+            Values: 
+              - !Ref TopicArn
+        Message:
+          StaticValue:
+            Values: 
+              - !Sub 'Notification from FTA-DisablePublicAccessForSecurityGroup trigger in AccountID: ${AWS::AccountId} and Region: ${AWS::Region} by SG:'
+        GroupId:
+          ResourceValue:
+            Value: RESOURCE_ID
+      RetryAttemptSeconds: 30
+      TargetId: !Ref DisablePublicAccessForSecurityGroup
+      TargetType: "SSM_DOCUMENT"
+
+
