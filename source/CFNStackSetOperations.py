@@ -145,7 +145,6 @@ def lambda_handler(event, context):
     """
     logger.info(event)
     account_id, regions = event["account"], event["regions"]
-    # template_url = "https://s3.amazonaws.com/securitytooling-terraform-state/aws-org-config-rules/base.yaml"
     template_url = os.environ["TemplateURL"]
     role_arn = os.environ["MemberRole"].replace("<accountId>", account_id)
     

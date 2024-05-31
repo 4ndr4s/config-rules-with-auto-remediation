@@ -1,4 +1,4 @@
-from CFNStackSetOperations import lambda_handler
+from GetMembers import lambda_handler
 
 
 event = None
