@@ -1,6 +1,6 @@
 {
     "Comment": "Resource exclusion in AWS Config",
-    "StartAt": "GetResourceExclusion",
+    "StartAt": "GetMembers",
 
     "States": {
 
@@ -22,7 +22,7 @@
         "CFNOperations": {
             "Type": "Map",
             "InputPath": "$.ExecutionData.Payload",
-            "ItemsPath": "$.exclusions",
+            "ItemsPath": "$.members",
             "Parameters": {  
                 "account.$": "$$.Map.Item.Value.AccountId",
                 "regions.$": "$$.Map.Item.Value.Regions"
@@ -30,13 +30,13 @@
             "OutputPath": "$",
             "MaxConcurrency": 10,
             "Iterator": {
-                "StartAt": "CFNOperations",
+                "StartAt": "CFNOperation",
                 "States": {
-                    "ApplyResourceExclusion": {
+                    "CFNOperation": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
                         "Parameters": {  
-                            "FunctionName": "${CFNOperations}",
+                            "FunctionName": "${CFNOperation}",
                             "Payload.$": "$"
                         },
                         "OutputPath": "$.Payload",

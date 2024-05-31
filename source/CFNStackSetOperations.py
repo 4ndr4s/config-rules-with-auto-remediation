@@ -24,7 +24,8 @@ def describe_stack_set(client, stack_set):
         if e.response['Error']['Code'] == 'StackSetNotFoundException':
             logger.info("StackSet not found.")
             response = "StackSet not found"
-        raise e
+        else:
+            logger.info("An error occurred:", e)
     return response
 
 
@@ -146,32 +147,28 @@ def lambda_handler(event, context):
     logger.info(event)
     account_id, regions = event["account"], event["regions"]
     template_url = os.environ["TemplateURL"]
-    role_arn = os.environ["MemberRole"].replace("<accountId>", account_id)
-    
-    # Assume role
-    sts_client = boto3.client("sts")
-    assumed_role_object = sts_client.assume_role(RoleArn=role_arn, RoleSessionName="AWSCloudformationRoleForConfigRules")
-    credentials = assumed_role_object["Credentials"]
 
     # Create CloudFormation client
     cfn_client = boto3.client(
         "cloudformation",
-        aws_access_key_id=credentials["AccessKeyId"],
-        aws_secret_access_key=credentials["SecretAccessKey"],
-        aws_session_token=credentials["SessionToken"],
-        region_name = DEFAULT_REGION
+        region_name=DEFAULT_REGION
     )
 
     # Check stack set status
-    stack_set_name = os.environ["StackSetName"]
+    stack_set_name = os.environ["StackSetName"] + "-" + account_id
     stack_set_status = describe_stack_set(cfn_client, stack_set_name)
 
     # Handle stack set status
     if stack_set_status == 'StackSet not found':
         create_stack_set(cfn_client, stack_set_name, template_url)
+        time.sleep(20)
         stack_set_status = describe_stack_set(cfn_client, stack_set_name)
         if stack_set_status['StackSet']['Status'] == 'ACTIVE':
-            create_stack_instances(cfn_client, account_id, regions, stack_set_name)
+            operation_id = create_stack_instances(cfn_client, account_id, regions, stack_set_name)['OperationId']
+            if describe_stack_set_operation(cfn_client, stack_set_name, operation_id) == "SUCCEEDED":
+                return {"statusCode": 200, "account": event["account"]}
+            else:
+                return {"statusCode": 500, "account": event["account"]}
         else:
             logger.info(f"An error occurred: {stack_set_status}")
     elif stack_set_status['StackSet']['Status'] == 'ACTIVE':

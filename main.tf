@@ -16,6 +16,7 @@ resource "aws_lambda_function" "get_members_lambda" {
   environment {
     variables = {
       "DynamoDB" = var.SCPdynamoDB
+      "DynamoDBRole" = var.SecTooling_DDB_Role_Arn
     }
   }
 }
@@ -30,12 +31,10 @@ resource "aws_lambda_function" "apply_exclusion_lambda" {
   timeout          = 900
   environment {
     variables = {
-      "MemberRole"   = "arn:aws:iam::<accountId>:role/${var.trusted_role_arn}"
       "TemplateURL"  = var.template_url
       "StackSetName" = var.stack_set_name
     }
   }
-  layers = ["arn:aws:lambda:us-east-1:412090077236:layer:boto3-configlayer:1"]
 }
 
 resource "aws_lambda_function" "check_execution_lambda" {
@@ -53,7 +52,7 @@ resource "aws_lambda_function" "start_execution_lambda" {
   filename         = data.archive_file.lambda_zip_file.output_path
   role             = aws_iam_role.lambda_role.arn
   handler          = "StartExecution.lambda_handler"
-  runtime          = "python3.10"
+  runtime          = "python3.12"
   source_code_hash = data.archive_file.lambda_zip_file.output_base64sha256
   timeout          = 900
   environment {
@@ -64,22 +63,13 @@ resource "aws_lambda_function" "start_execution_lambda" {
   depends_on = [aws_sfn_state_machine.cloudformation_operations]
 }
 
-resource "aws_s3_bucket_notification" "aws_lambda_trigger" {
-  bucket = var.bucket_name
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.start_execution_lambda.arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "accounts"
-    filter_suffix       = ".json"
-
-  }
-}
 
 resource "aws_lambda_permission" "execution_lambda_invoke" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.start_execution_lambda.function_name
   principal     = "s3.amazonaws.com"
-  source_arn    = var.bucket_name
+  source_arn    = "arn:aws:s3:::${var.bucket_name}"
+  source_account = var.SecurityToolingAccountId
   statement_id  = "AllowS3Invoke"
 }
 
@@ -87,7 +77,7 @@ data "template_file" "statemachine_tpl" {
   template = file("${path.module}/StateMachine.json")
   vars = {
     GetMembers     = aws_lambda_function.get_members_lambda.arn
-    CFNOperations  = aws_lambda_function.apply_exclusion_lambda.arn
+    CFNOperation  = aws_lambda_function.apply_exclusion_lambda.arn
     CheckExecution = aws_lambda_function.check_execution_lambda.arn
   }
 }

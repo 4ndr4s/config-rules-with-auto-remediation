@@ -57,7 +57,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
     actions = [
       "sts:AssumeRole"
     ]
-    resources = ["arn:aws:iam::*:role/${var.trusted_role_arn}"]
+    resources = [var.SecTooling_DDB_Role_Arn]
   }
   statement {
     effect = "Allow"
@@ -68,6 +68,20 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
       "dynamodb:GetItem"
     ]
     resources = ["arn:aws:dynamodb:us-east-1:${var.SecurityToolingAccountId}:table/${var.SCPdynamoDB}"]
+  }
+  statement {
+    effect = "Allow"
+    actions = [
+        "cloudformation:CreateStackSet",
+        "cloudformation:UpdateStackSet",
+        "cloudformation:DescribeStackSet",
+        "cloudformation:CreateStackInstances",
+        "cloudformation:UpdateStackInstances",
+        "cloudformation:DescribeStackSetOperation",
+        "cloudformation:DeleteStackInstances",
+        "cloudformation:TagResource"
+    ]
+    resources = ["*"]
   }
   statement {
     effect = "Allow"

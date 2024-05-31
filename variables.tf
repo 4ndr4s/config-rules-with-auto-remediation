@@ -25,10 +25,13 @@ variable "SecurityToolingAccountId" {
   default = 412090077236
 }
 variable "template_url" {
-  default = "https://s3.amazonaws.com/securitytooling-terraform-state/aws-org-config-rules/base.yaml"
+  default = "https://s3.amazonaws.com/fta-cloudformation-templates-us-east-1/aws-org-config-rules/base.yaml"
 
 }
 variable "stack_set_name" {
   default = "FTA-AWS-Config-Rules"
 
+}
+variable "SecTooling_DDB_Role_Arn" {
+  default = "arn:aws:iam::412090077236:role/FTA-DynamoDB-For-CloudOps-IaC"
 }

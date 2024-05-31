@@ -4,7 +4,7 @@ Description: AWS Config rules
 Parameters:
   cfnTemplatesBucketURL:
     Type: String
-    Default: "https://s3.amazonaws.com/securitytooling-terraform-state"
+    Default: "https://s3.amazonaws.com/fta-cloudformation-templates-us-east-1"
     Description: S3 Bucket URL containing CFN templates e.g. https://<name>.s3.amazonaws.com/<AWS_REGION>/<VERSION>
 
 Resources:
