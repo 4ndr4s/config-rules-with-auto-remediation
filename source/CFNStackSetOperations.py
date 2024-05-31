@@ -130,6 +130,19 @@ def delete_stack_instances(client, account, regions, stack_set):
 
 
 def lambda_handler(event, context):
+    """
+    Lambda function handler for managing CloudFormation StackSets.
+
+    Args:
+        event (dict): The event data passed to the Lambda function.
+        context (object): The runtime information of the Lambda function.
+
+    Returns:
+        dict: The response containing the status code and account information.
+
+    Raises:
+        KeyError: If required environment variables are not set.
+    """
     logger.info(event)
     account_id, regions = event["account"], event["regions"]
     # template_url = "https://s3.amazonaws.com/securitytooling-terraform-state/aws-org-config-rules/base.yaml"
