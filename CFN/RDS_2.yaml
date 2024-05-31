@@ -6,6 +6,10 @@ Parameters:
     Type: String
     Default: "FTA-ConfigAutoRemediation"
     Description: role Name
+  TopicArn:
+    Type: String
+    Default: "arn:aws:sns:us-east-1:412090077236:FTA-Sec-Tooling-SNS-topic"
+    Description: topic ARN on Security Tooling
 
 Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -21,7 +25,7 @@ Resources:
           ### Document name - AWSConfigRemediation-DisablePublicAccessToRDSInstance
 
           ## What does this document do?
-          The runbook disables public accessibility for the Amazon RDS database instance you specify using 
+          The runbook disables public accessibility for the Amazon RDS database instance you specify using
           the [ModifyDBInstance](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_ModifyDBInstance.html) API.
 
           ## Input Parameters
@@ -78,7 +82,7 @@ Resources:
             isEnd: false
             description: |
               ## VerifyDBInstanceStatus
-              Waits for and verifies the DB instances is in an AVAILABLE state. 
+              Waits for and verifies the DB instances is in an AVAILABLE state.
             inputs:
               Service: rds
               Api: DescribeDBInstances

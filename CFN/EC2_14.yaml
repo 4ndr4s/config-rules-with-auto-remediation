@@ -129,11 +129,11 @@ Resources:
               - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
         TopicArn:
           StaticValue:
-            Values: 
+            Values:
               - !Ref TopicArn
         Message:
           StaticValue:
-            Values: 
+            Values:
               - !Sub 'Notification from FTA-DisablePublicAccessForSecurityGroup trigger in AccountID: ${AWS::AccountId} and Region: ${AWS::Region} by SG:'
         GroupId:
           ResourceValue:
