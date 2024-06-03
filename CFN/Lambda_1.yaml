@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Config rule for SSH and RDP
+
+Parameters:
+  AutomationRoleName:
+    Type: String
+    Default: "FTA-ConfigAutoRemediation"
+    Description: role Name
+  TopicArn:
+    Type: String
+    Default: "arn:aws:sns:us-east-1:412090077236:FTA-Sec-Tooling-SNS-topic"
+    Description: topic ARN on Security Tooling
+
+Resources:
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  # [Lambda.1] Lambda functions should prohibit public access
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  RestrictPublicLambda:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Name: FTA-RestrictPublicLambda
+      Content:
+        schemaVersion: '0.3'
+        assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        parameters:
+          AutomationAssumeRole:
+            type: String
+            default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+          accountID:
+            type: String    
+          functionname:
+            type: String
+          TopicArn:
+            type: String
+            description: (Required) The ARN of the SNS topic to publish the notification to.
+          Message:
+            type: String
+            description: (Required) The message to include in the SNS notification. 
+        mainSteps:
+          - name: RestrictLambda
+            action: 'aws:executeScript'
+            inputs:
+              Runtime: python3.10
+              Handler: script_handler
+              # Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  \r\n  client = boto3.client('lambda')\r\n  functionname = events['functionname']\r\n  accountID = events['accountID']\r\n  response = client.get_policy(FunctionName=functionname)\r\n  policy = response['Policy']\r\n  policy_json = json.loads(policy)\r\n  statements = policy_json['Statement']\r\n  \r\n  for statement in statements:\r\n      Principal = str(statement['Principal']).replace(\"{'Service': '\",\"\")[:-2]\r\n      Action = statement['Action']\r\n      Resource = statement['Resource']\r\n      StatementId = statement ['Sid']\r\n      NewStatementId = \"New\" + StatementId\r\n        \r\n      response_old = client.remove_permission(\r\n                   FunctionName=functionname,\r\n                   StatementId=StatementId\r\n      )\r\n\r\n      response = client.add_permission(\r\n                  FunctionName=functionname,\r\n                  StatementId=NewStatementId,\r\n                  Action=Action,\r\n                  Principal=Principal,\r\n                  SourceAccount= accountID\r\n      )"
+              Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  \r\n  client = boto3.client('lambda')\r\n  functionname = events['functionname']\r\n  accountID = events['accountID']\r\n  response = client.get_policy(FunctionName=functionname)\r\n  policy = response['Policy']\r\n  policy_json = json.loads(policy)\r\n  statements = policy_json['Statement']\r\n  \r\n  for statement in statements:\r\n    if statement['Principal'] == \"*\":\r\n      response_old = client.remove_permission(\r\n        FunctionName=functionname,\r\n        StatementId=statement['Sid']\r\n      )\r\n      print(\"wildcard policy removed\")\r\n        \r\n    elif statement['Principal']['Service'] == 's3.amazonaws.com':\r\n      if 'Condition' not in statement:\r\n        response_old = client.remove_permission(\r\n          FunctionName=functionname,\r\n\r\n          StatementId=statement['Sid']\r\n        )\r\n      else:\r\n        print(\"not action required\")\r\n"
+              InputPayload:
+                AutomationAssumeRole: '{{AutomationAssumeRole}}'
+                accountID: '{{accountID}}'
+                functionname: '{{functionname}}'
+          - name: PublishSNSNotification
+            action: aws:executeAwsApi
+            inputs:
+              Service: sns
+              Api: Publish
+              TopicArn: "{{TopicArn}}"
+              Message: "{{Message}}, {{functionname}}"
+            isEnd: true
+  AWSConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: lambda-function-public-access-prohibited
+      Description: Checks whether the Lambda function policy prohibits public access.
+      Scope: 
+        ComplianceResourceTypes: 
+          - AWS::Lambda::Function
+      Source:
+          Owner: AWS
+          SourceIdentifier: LAMBDA_FUNCTION_PUBLIC_ACCESS_PROHIBITED
+  ConfigAutoremediation:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref AWSConfigRule
+      MaximumAutomaticAttempts: 3
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: 
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        accountID:
+          StaticValue:
+            Values:
+              - !Ref 'AWS::AccountId'
+        TopicArn:
+          StaticValue:
+            Values: 
+              - !Ref TopicArn
+        Message:
+          StaticValue:
+            Values: 
+              - !Sub 'Notification from FTA-RestrictPublicLambda trigger in AccountID: ${AWS::AccountId} and Region: ${AWS::Region} by Lambda: '
+        functionname:
+          ResourceValue:
+            Value: RESOURCE_ID
+      RetryAttemptSeconds: 30
+      TargetId: !Ref RestrictPublicLambda
+      TargetType: "SSM_DOCUMENT"

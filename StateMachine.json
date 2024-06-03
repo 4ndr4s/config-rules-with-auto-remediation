@@ -1,0 +1,89 @@
+{
+    "Comment": "Resource exclusion in AWS Config",
+    "StartAt": "GetMembers",
+
+    "States": {
+
+        "GetMembers": {
+            "Type": "Task",
+            "TimeoutSeconds": 300,
+            "Resource": "arn:aws:states:::lambda:invoke",
+
+            "InputPath": "$",
+            "ResultPath": "$.ExecutionData",
+            "OutputPath": "$",
+
+            "Parameters": {  
+                "FunctionName": "${GetMembers}",
+                "Payload.$": "$"
+            },
+            "Next": "CFNOperations"
+        },
+        "CFNOperations": {
+            "Type": "Map",
+            "InputPath": "$.ExecutionData.Payload",
+            "ItemsPath": "$.members",
+            "Parameters": {  
+                "account.$": "$$.Map.Item.Value.AccountId",
+                "regions.$": "$$.Map.Item.Value.Regions"
+            },
+            "OutputPath": "$",
+            "MaxConcurrency": 10,
+            "Iterator": {
+                "StartAt": "CFNOperation",
+                "States": {
+                    "CFNOperation": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Parameters": {  
+                            "FunctionName": "${CFNOperation}",
+                            "Payload.$": "$"
+                        },
+                        "OutputPath": "$.Payload",
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "TimeOut"
+                            ],
+                            "IntervalSeconds": 1,
+                            "BackoffRate": 2,
+                            "MaxAttempts": 3
+                            }
+                        ],
+                        "End": true
+                    }
+                }
+            },
+            "ResultPath": "$.detail.processedItems",
+            "Next": "CheckResult"
+        },
+        "CheckResult": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "InputPath": "$.detail",
+            "Parameters": {  
+                "FunctionName": "${CheckExecution}",
+                "Payload.$": "$"
+            },
+            "Next": "Evaluate"
+        },
+        "Evaluate": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.Payload.statusCode",
+                    "NumericEquals": 500,
+                    "Next": "PipelineFailed"
+                }
+            ],
+            "Default": "PipelineSucceed"
+        },
+        "PipelineFailed": {
+            "Type": "Fail",
+            "Cause": "At least one account could not be updated."
+        },
+        "PipelineSucceed": {
+            "Type": "Succeed"
+        }
+    }
+}
