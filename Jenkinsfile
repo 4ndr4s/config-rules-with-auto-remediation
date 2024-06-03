@@ -13,15 +13,31 @@ pipeline {
                 sh 'echo CFN templates uploaded'
             }
         }
-        stage('Update Stackset') {
+        stage('Terraform init') {
             steps {
                 script {
-                    sh '''aws cloudformation update-stack-set --stack-set-name FTA-Org-AWS-Config-Rules \
-                    --template-body file://CFN/base.yaml --capabilities CAPABILITY_NAMED_IAM \
-                    --managed-execution Active=true --region us-east-1 \
-                    --operation-preferences FailureTolerancePercentage=100,MaxConcurrentCount=30,RegionConcurrencyType=PARALLEL'''
+                    sh "echo terraform init"
+                    sh 'terraform init'
                 }
-                sh 'echo stackset update is done'
+                sh 'echo terraform init is done'
+            }
+        }
+        stage('Terraform plan') {
+            steps {
+                script {
+                    sh "echo starting terraform plan"
+                    sh 'terraform plan'
+                }
+                sh 'echo terraform plan is done'
+            }
+        }
+        stage('Terraform apply') {
+            steps {
+                script {
+                    sh "echo terraform apply"
+                    sh 'terraform apply --auto-approve'
+                }
+                sh 'echo terraform apply is done'
             }
         }
     }
