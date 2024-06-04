@@ -18,6 +18,7 @@ Resources:
   DisablePublicAccessToRDSInstance:
     Type: AWS::SSM::Document
     Properties:
+      UpdateMethod: NewVersion
       DocumentType: Automation
       Name: FTA-DisablePublicAccessToRDSInstance
       Content:
