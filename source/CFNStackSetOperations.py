@@ -72,7 +72,7 @@ def create_stack_instances(client, account, regions, stack_set):
 
 def update_stack_set(client, stack_set, template):
     try:
-        response = client.create_stack_set(
+        response = client.update_stack_set(
             StackSetName=stack_set,
             Description='StackSet to deploy AWS Config Rules per account in designated regions',
             TemplateURL=template,
@@ -219,7 +219,7 @@ def lambda_handler(event, context):
                     return {"statusCode": 500, "account": event["account"]}
         else:
             # operation_id = update_stack_instances(cfn_client, account_id, regions, stack_set_name)['OperationId']
-            operation_id = update_stack_set(cfn_client, account_id, regions, stack_set_name)['OperationId']
+            operation_id = update_stack_set(cfn_client, stack_set_name, template_url)['OperationId']
             if describe_stack_set_operation(cfn_client, stack_set_name, operation_id) == "SUCCEEDED":
                 return {"statusCode": 200, "account": event["account"]}
             else:
