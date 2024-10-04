@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create lambda function that will be trigger as part of Aws Config Auto remediation Action
+
+Resources:
+  # Define the Lambda function
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: FTA-GetTagsbyResource
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import logging
+          import sys
+          from botocore.exceptions import ClientError
+
+          # Setting up logger
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
+
+          client = boto3.client('resourcegroupstaggingapi')
+
+
+          def get_resource_tags(partition, aws_service, aws_region, aws_account, aws_resource_type, aws_resource_id, aws_control_id):
+              # Construct the ARN based on whether aws_account is provided
+              if aws_account:
+                  resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_type}/{aws_resource_id}'
+              else:
+                  resource_arn = f'arn:{partition}:{aws_service}:::{aws_resource_id}'
+
+              try:
+                  # Fetch the resource tags
+                  response = client.get_resources(ResourceARNList=[resource_arn])
+              except Exception as e:
+                  # Handle exceptions (e.g., logging the error)
+                  logger.error(f"Error fetching resource tags: {e}")
+                  return []  # Return an empty list or handle as needed
+
+              # Extract tags that start with the service name
+              tag_list = []
+              resource_tag_mapping_list = response.get('ResourceTagMappingList', [{}])
+              if resource_tag_mapping_list and 'Tags' in resource_tag_mapping_list[0]:
+                tag_list = [
+                    tag for tag in resource_tag_mapping_list[0]['Tags']
+                    if tag['Key'] == aws_control_id
+                ]
+              logger.info(tag_list)
+              # tag_list = [
+              #     tag for tag in response.get('ResourceTagMappingList', [{}])[0].get('Tags', [])
+              #     if tag['Key'] == aws_control_id
+              # ]
+
+              return tag_list
+
+
+          def get_item_by_uuid_and_type(table_name, uuid, item_type):
+              # Initialize a session using your AWS credentials
+              session = boto3.Session(region_name='us-east-1')
+              dynamodb = session.resource('dynamodb')
+
+              # Reference the DynamoDB table
+              table = dynamodb.Table(table_name)
+
+              try:
+                  # Get the item from the table using the UUID and Type as keys
+                  response = table.get_item(
+                      Key={
+                          'UUID': uuid,  # Replace 'UUID' with your actual partition key name
+                          'Type': item_type  # Replace 'Type' with your actual sort key name
+                      }
+                  )
+              except ClientError as e:
+                  logger.error(f"Error fetching item: {e.response['Error']['Message']}")
+                  return None
+
+              # Check if the item exists in the response
+              if 'Item' in response:
+                  return response['Item']
+              else:
+                  logger.info("Item not found.")
+                  return None
+          def lambda_handler(event, context):
+            aws_service = event.get('aws_service', '')
+            resource_id = event.get('resource_id', '')
+            account_id = event.get('account_id', '')
+            resource_type = event.get('resource_type', '')
+            region = event.get('region', '')
+            partition = event.get('partition', '')
+            control_id = event.get('control_id', '')
+            table_name = event.get('ddb_table', '')
+            item = dict()
+
+            # Determine the parameters for get_resource_tags based on the service
+            if aws_service == 's3':
+                list_of_tags = get_resource_tags(partition, aws_service='s3', aws_region='', aws_account='', aws_resource_type='',
+                                            aws_resource_id=resource_id, aws_control_id=control_id)
+            elif aws_service in ['iam', 'cloudfront']:
+                list_of_tags = get_resource_tags(partition, aws_service=aws_service, aws_region='', aws_account=account_id,
+                                            aws_resource_type=resource_type, aws_resource_id=resource_id, aws_control_id=control_id)
+            else:
+                list_of_tags = get_resource_tags(partition, aws_service=aws_service, aws_region=region, aws_account=account_id,
+                                            aws_resource_type=resource_type, aws_resource_id=resource_id, aws_control_id=control_id)
+
+            if list_of_tags:
+                for tag in list_of_tags:
+                    logger.info(tag['Value'])
+                    item = get_item_by_uuid_and_type(table_name, tag['Value'], tag['Key'])
+                    logger.info(item)
+                if item is None:
+                    logger.info("not valid tag exclusion, running auto remediation")
+                    return "NotExcluded"
+                if str(account_id) in item['AccountId']:
+                    logger.info(f'excluding resource: {resource_id} on {account_id}')
+                    return "Excluded"
+                else:
+                    logger.info("not valid exclusion, running auto remediation")
+                    return "NotExcluded"
+            else:
+                logger.info(f'No tags on resource, {resource_id}')
+                return "NotExcluded"
+
+      Runtime: python3.12
+      Timeout: 15
+
+  # Define the IAM role for the Lambda function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal: 
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/FTA-ConfigAutoRemediation
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - tag:GetResources
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
