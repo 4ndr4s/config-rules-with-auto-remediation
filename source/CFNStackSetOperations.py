@@ -70,6 +70,35 @@ def create_stack_instances(client, account, regions, stack_set):
     return response
 
 
+def update_stack_set(client, stack_set, template):
+    try:
+        response = client.create_stack_set(
+            StackSetName=stack_set,
+            Description='StackSet to deploy AWS Config Rules per account in designated regions',
+            TemplateURL=template,
+            UsePreviousTemplate=False,
+            Capabilities=[ 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND' ],
+            OperationPreferences={
+                'RegionConcurrencyType': 'PARALLEL',
+                'FailureTolerancePercentage': 100,
+                'MaxConcurrentCount': 1
+            },
+            CallAs='SELF'
+            Tags=[
+                {
+                    'Key': 'FTA-Project',
+                    'Value': 'AWSConfigRules'
+                },
+            ],
+            ManagedExecution={'Active': True}
+        )
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == 'StackSetNotFoundException':
+            logger.info("StackSet Not Found.")
+        raise e
+    return response
+
+
 def update_stack_instances(client, account, regions, stack_set):
     try:
         response = client.update_stack_instances(
@@ -189,7 +218,8 @@ def lambda_handler(event, context):
                 else:
                     return {"statusCode": 500, "account": event["account"]}
         else:
-            operation_id = update_stack_instances(cfn_client, account_id, regions, stack_set_name)['OperationId']
+            # operation_id = update_stack_instances(cfn_client, account_id, regions, stack_set_name)['OperationId']
+            operation_id = update_stack_set(cfn_client, account_id, regions, stack_set_name)['OperationId']
             if describe_stack_set_operation(cfn_client, stack_set_name, operation_id) == "SUCCEEDED":
                 return {"statusCode": 200, "account": event["account"]}
             else:
