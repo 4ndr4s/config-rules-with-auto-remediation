@@ -83,7 +83,7 @@ def update_stack_set(client, stack_set, template):
                 'FailureTolerancePercentage': 100,
                 'MaxConcurrentCount': 1
             },
-            CallAs='SELF'
+            CallAs='SELF',
             Tags=[
                 {
                     'Key': 'FTA-Project',
