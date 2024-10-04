@@ -58,9 +58,6 @@ Resources:
             description: (Optional) Additional Ipv4 or Ipv6 address to block access from (ex:1.2.3.4/32)
             allowedPattern: (^$)|^((25[0-5]|(2[0-4]\d|[0-1]?\d?\d)(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3})|(^((?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?)::((?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?))|(^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}))\/(25[0-5]|2[0-4]\d|[0-1]?\d?\d)$
             default: ""
-          Message:
-            type: String
-            description: (Required) The message to include in the SNS notification.
           GetTagsLambda:
             type: String
             default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
@@ -153,7 +150,7 @@ Resources:
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: FTA-Test-RestrictRDPPublicAccess
+      ConfigRuleName: FTA-RestrictRDPPublicAccess-Tags
       Description: Restrict public access to 3389 port
       InputParameters:
         blockedPort1: 3389
