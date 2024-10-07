@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create lambda function that will be trigger as part of Aws Config Auto remediation Action
+
+Parameters:
+  SecToolingS3QuickSightBucket:
+    Type: String
+    Default: "quick-sight-report-exclusion-622c56"
+    Description: Name of Quick Sight S3 bucket for Security Tooling
+Resources:
+  # Define the Lambda function
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: FTA-GetAccountInventory
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import sys
+          import logging
+          from datetime import datetime
+          from botocore.exceptions import ClientError
+
+          # Setting up logger
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
+
+          def get_item_by_uuid_and_type(table_name, account_id):
+              # Initialize a session using your AWS credentials
+              session = boto3.Session(region_name='us-east-1')
+              dynamodb = session.resource('dynamodb')
+
+              # Reference the DynamoDB table
+              table = dynamodb.Table(table_name)
+
+              try:
+                  # Get the item from the table using the UUID and Type as keys
+                  response = table.get_item(
+                      Key={
+                          'AccountId': account_id
+                      }
+                  )
+              except ClientError as e:
+                  logger.error(f"Error fetching item: {e.response['Error']['Message']}")
+                  return None
+
+              # Check if the item exists in the response
+              if 'Item' in response:
+                  return response['Item']
+              else:
+                  logger.error("Item not found.")
+                  return None
+
+
+          def lambda_handler(event, context):
+              s3_bucket = event.get('S3Bucket')
+              account_id = event.get('account_id')
+              control_id = event.get('control_id')
+              resource_id = event.get('resource_id')
+              region = event.get('region')
+              status = event.get('status')
+              table_name = event.get('ddb_table')
+
+              current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+              current_date = datetime.now().strftime('%m/%d/%Y')
+
+              item = get_item_by_uuid_and_type(table_name, str(account_id))
+              print(item)
+
+              data = {
+                  "AccountId": account_id,
+                  "AccountName": item['AccountName'],
+                  "Brand": item['Brand'],
+                  "AccountType": item['OUType'],
+                  "ResourceId": resource_id,
+                  "Region": region,
+                  "control_type": control_id,
+                  "status": status,
+                  "timeline": current_date
+              }
+              logger.info(f"uploading data: {data}")
+              file = json.dumps(data)
+              client = boto3.client('s3')
+              report = f'{status}/{account_id}/{region}/{current_time}/{resource_id}.json'
+              client.put_object(Body=file, Bucket=s3_bucket, Key=report)
+              return data
+
+      Runtime: python3.12
+      Timeout: 15
+
+  # Define the IAM role for the Lambda function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal: 
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/FTA-ConfigAutoRemediation
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - tag:GetResources
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:PutObject
+                Resource: [!Sub "arn:aws:s3:::${SecToolingS3QuickSightBucket}/*", "arn:aws:s3:::${SecToolingS3QuickSightBucket}" ]
