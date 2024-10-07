@@ -15,7 +15,7 @@ Resources:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessForSecurityGroup-withTags
+      Name: FTA-DisablePublicAccessForSecurityGroups-withTags
       Content:
         description: >-
           ## Disable RDP ports opened to IP address specified,
@@ -61,6 +61,15 @@ Resources:
           GetTagsLambda:
             type: String
             default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+          GetInventoryLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+          ExclusionTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+          InventoryTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
           QuickSightS3:
             type: String
             default: "quick-sight-report-exclusion-622c56"
@@ -78,7 +87,7 @@ Resources:
                   "resource_id": "{{GroupId}}",
                   "partition": "aws",
                   "control_id": "EC2.14",
-                  "ddb_table": "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+                  "ddb_table": "{{ExclusionTable}}"
                 }
           - name: LambdaOutputCheck
             action: aws:branch
@@ -96,18 +105,33 @@ Resources:
               Default:
                 DisableRDPFromIpV4
           - name: PublishExcludeLambda
-            action: 'aws:executeScript'
+            action: 'aws:invokeLambdaFunction'
             inputs:
-              Runtime: python3.10
-              Handler: script_handler
-              Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  from datetime import datetime\r\n  \r\n  s3_bucket = events['S3Bucket']\r\n  account_id = events['accountID']\r\n  control_id = events['ControlID']\r\n  region = events['region']\r\n  resource_id = events['ResourceID']\r\n  current_time = datetime.now().strftime('%Y%m%d_%H%M%S')\r\n  data = {\"AccountId\": account_id, \"ResourceId\": resource_id, \"Region\": region, \"control_type\": control_id, \"status\": \"excluded\", \"timeline\": current_time} \r\n  file = json.dumps(data)\r\n  client = boto3.client('s3')\r\n  report = f'excluded/{account_id}/{region}/{current_time}/{resource_id}.json'\r\n  client.put_object(Body=file,Bucket=s3_bucket,Key=report)\r\n"
-              InputPayload:
-                ResourceID: '{{GroupId}}'
-                accountID: '{{AccountId}}'
-                region: '{{Region}}'
-                S3Bucket: '{{QuickSightS3}}'
-                ControlID: '{{ControlId}}'
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "excluded",
+                  "resource_id": "{{GroupId}}",
+                  "control_id": "EC2.14",
+                  "ddb_table": "{{InventoryTable}}"
+                }
             isEnd: true
+          # - name: PublishExcludeLambda
+          #   action: 'aws:executeScript'
+          #   inputs:
+          #     Runtime: python3.10
+          #     Handler: script_handler
+          #     Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  from datetime import datetime\r\n  \r\n  s3_bucket = events['S3Bucket']\r\n  account_id = events['accountID']\r\n  control_id = events['ControlID']\r\n  region = events['region']\r\n  resource_id = events['ResourceID']\r\n  current_time = datetime.now().strftime('%Y%m%d_%H%M%S')\r\n  data = {\"AccountId\": account_id, \"ResourceId\": resource_id, \"Region\": region, \"control_type\": control_id, \"status\": \"excluded\", \"timeline\": current_time} \r\n  file = json.dumps(data)\r\n  client = boto3.client('s3')\r\n  report = f'excluded/{account_id}/{region}/{current_time}/{resource_id}.json'\r\n  client.put_object(Body=file,Bucket=s3_bucket,Key=report)\r\n"
+          #     InputPayload:
+          #       ResourceID: '{{GroupId}}'
+          #       accountID: '{{AccountId}}'
+          #       region: '{{Region}}'
+          #       S3Bucket: '{{QuickSightS3}}'
+          #       ControlID: '{{ControlId}}'
+          #   isEnd: true
           - name: DisableRDPFromIpV4
             action: "aws:executeAwsApi"
             inputs:
@@ -135,18 +159,33 @@ Resources:
                     - CidrIpv6: "::/0"
             onFailure: Continue
           - name: PublishRemediationLambda
-            action: 'aws:executeScript'
+            action: 'aws:invokeLambdaFunction'
             inputs:
-              Runtime: python3.10
-              Handler: script_handler
-              Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  from datetime import datetime\r\n  \r\n  s3_bucket = events['S3Bucket']\r\n  account_id = events['accountID']\r\n  control_id = events['ControlID']\r\n  region = events['region']\r\n  resource_id = events['ResourceID']\r\n  current_time = datetime.now().strftime('%Y%m%d_%H%M%S')\r\n  data = {\"AccountId\": account_id, \"ResourceId\": resource_id, \"Region\": region, \"control_type\": control_id, \"status\": \"remediated\", \"timeline\": current_time} \r\n  file = json.dumps(data)\r\n  client = boto3.client('s3')\r\n  report = f'remediated/{account_id}/{region}/{current_time}/{resource_id}.json'\r\n  client.put_object(Body=file,Bucket=s3_bucket,Key=report)\r\n"
-              InputPayload:
-                ResourceID: '{{GroupId}}'
-                accountID: '{{AccountId}}'
-                region: '{{Region}}'
-                S3Bucket: '{{QuickSightS3}}'
-                ControlID: '{{ControlId}}'
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "remediated",
+                  "resource_id": "{{GroupId}}",
+                  "control_id": "EC2.14",
+                  "ddb_table": "{{InventoryTable}}"
+                }
             isEnd: true
+          # - name: PublishRemediationLambda
+          #   action: 'aws:executeScript'
+          #   inputs:
+          #     Runtime: python3.10
+          #     Handler: script_handler
+          #     Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  from datetime import datetime\r\n  \r\n  s3_bucket = events['S3Bucket']\r\n  account_id = events['accountID']\r\n  control_id = events['ControlID']\r\n  region = events['region']\r\n  resource_id = events['ResourceID']\r\n  current_time = datetime.now().strftime('%Y%m%d_%H%M%S')\r\n  data = {\"AccountId\": account_id, \"ResourceId\": resource_id, \"Region\": region, \"control_type\": control_id, \"status\": \"remediated\", \"timeline\": current_time} \r\n  file = json.dumps(data)\r\n  client = boto3.client('s3')\r\n  report = f'remediated/{account_id}/{region}/{current_time}/{resource_id}.json'\r\n  client.put_object(Body=file,Bucket=s3_bucket,Key=report)\r\n"
+          #     InputPayload:
+          #       ResourceID: '{{GroupId}}'
+          #       accountID: '{{AccountId}}'
+          #       region: '{{Region}}'
+          #       S3Bucket: '{{QuickSightS3}}'
+          #       ControlID: '{{ControlId}}'
+          #   isEnd: true
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
