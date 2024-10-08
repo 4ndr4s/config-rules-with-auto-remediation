@@ -66,7 +66,7 @@ Resources:
               table_name = event.get('ddb_table')
 
               current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-              current_date = datetime.now().strftime('%m/%d/%YT%H:%M:%S')
+              current_date = datetime.now().strftime('%m/%d/%Y %H:%M:%S')
 
               item = get_item_by_uuid_and_type(table_name, str(account_id))
               print(item)
