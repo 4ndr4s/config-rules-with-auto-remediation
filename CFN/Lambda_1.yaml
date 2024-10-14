@@ -14,7 +14,7 @@ Resources:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-RestrictPublicLambda-WithTags
+      Name: FTA-RestrictPublicLambdaAccess-WithTags
       Content:
         schemaVersion: '0.3'
         assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
@@ -32,7 +32,7 @@ Resources:
             default: !Sub ${AWS::AccountId}
           ResourceType:
             type: String
-            default: 'security-group'
+            default: 'function'
           Partition:
             type: String
             default: "aws"
@@ -62,12 +62,12 @@ Resources:
               Payload: !Sub |
                 {
                   "account_id": ${AWS::AccountId},
-                  "aws_service": {{AwsService}},
+                  "aws_service": "{{AwsService}}",
                   "region": "${AWS::Region}",
-                  "resource_type": "security-group",
+                  "resource_type": "{{ResourceType}}",
                   "resource_id": "{{FunctionName}}",
-                  "partition": {{Partition}},
-                  "control_id": {{ControlId}},
+                  "partition": "{{Partition}}",
+                  "control_id": "{{ControlId}}",
                   "ddb_table": "{{ExclusionTable}}"
                 }
           - name: LambdaOutputCheck
@@ -93,7 +93,7 @@ Resources:
                   "region": "${AWS::Region}",
                   "status": "excluded",
                   "resource_id": "{{FunctionName}}",
-                  "control_id": {{ControlId}},
+                  "control_id": "{{ControlId}}",
                   "ddb_table": "{{InventoryTable}}"
                 }
             isEnd: true
@@ -118,14 +118,14 @@ Resources:
                   "region": "${AWS::Region}",
                   "status": "remediated",
                   "resource_id": "{{FunctionName}}",
-                  "control_id": {{ControlId}},
+                  "control_id": "{{ControlId}}",
                   "ddb_table": "{{InventoryTable}}"
                 }
             isEnd: true
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: lambda-function-public-access-prohibited
+      ConfigRuleName: lambda-function-public-access-prohibited-test
       Description: Checks whether the Lambda function policy prohibits public access.
       Scope: 
         ComplianceResourceTypes: 
