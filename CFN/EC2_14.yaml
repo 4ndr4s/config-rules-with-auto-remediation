@@ -15,7 +15,7 @@ Resources:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessForSecurityGroups-withTags
+      Name: FTA-DisablePublicAccessForSecurityGroups-WithTags
       Content:
         description: >-
           ## Disable RDP ports opened to IP address specified,
@@ -43,9 +43,6 @@ Resources:
           ControlId:
             type: String
             default: "EC2.14"
-          TableName:
-            type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
           AutomationAssumeRole:
             type: String
             default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
@@ -81,12 +78,12 @@ Resources:
               Payload: !Sub |
                 {
                   "account_id": ${AWS::AccountId},
-                  "aws_service": "ec2",
+                  "aws_service": {{AwsService}},
                   "region": "${AWS::Region}",
                   "resource_type": "security-group",
                   "resource_id": "{{GroupId}}",
-                  "partition": "aws",
-                  "control_id": "EC2.14",
+                  "partition": {{Partition}},
+                  "control_id": {{ControlId}},
                   "ddb_table": "{{ExclusionTable}}"
                 }
           - name: LambdaOutputCheck
