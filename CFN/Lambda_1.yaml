@@ -81,7 +81,7 @@ Resources:
                 Variable: "{{InvokeMyLambdaFunction.Payload}}"
                 StringEquals: "Excluded"
               Default:
-                DisableRDPFromIpV4
+                RestrictLambda
           - name: PublishExcludeLambda
             action: 'aws:invokeLambdaFunction'
             inputs:
