@@ -6,11 +6,6 @@ Parameters:
     Type: String
     Default: "FTA-ConfigAutoRemediation"
     Description: role Name
-  TopicArn:
-    Type: String
-    Default: "arn:aws:sns:us-east-1:412090077236:FTA-Sec-Tooling-SNS-topic"
-    Description: topic ARN on Security Tooling
-
 Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
   # [Lambda.1] Lambda functions should prohibit public access
@@ -19,7 +14,7 @@ Resources:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-RestrictPublicLambda
+      Name: FTA-RestrictPublicLambda-WithTags
       Content:
         schemaVersion: '0.3'
         assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
@@ -27,35 +22,105 @@ Resources:
           AutomationAssumeRole:
             type: String
             default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
-          accountID:
-            type: String    
-          functionname:
+          FunctionName:
             type: String
-          TopicArn:
+          AwsService:
             type: String
-            description: (Required) The ARN of the SNS topic to publish the notification to.
-          Message:
+            default: 'lambda'
+          AccountId:
             type: String
-            description: (Required) The message to include in the SNS notification. 
+            default: !Sub ${AWS::AccountId}
+          ResourceType:
+            type: String
+            default: 'security-group'
+          Partition:
+            type: String
+            default: "aws"
+          ControlId:
+            type: String
+            default: "Lambda.1"
+          GetTagsLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+          GetInventoryLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+          ExclusionTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+          InventoryTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+          QuickSightS3:
+            type: String
+            default: "quick-sight-report-exclusion-622c56"
         mainSteps:
+          - name: 'InvokeMyLambdaFunction'
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetTagsLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "aws_service": {{AwsService}},
+                  "region": "${AWS::Region}",
+                  "resource_type": "security-group",
+                  "resource_id": "{{FunctionName}}",
+                  "partition": {{Partition}},
+                  "control_id": {{ControlId}},
+                  "ddb_table": "{{ExclusionTable}}"
+                }
+          - name: LambdaOutputCheck
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: RestrictLambda
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "NotExcluded"
+              - NextStep: PublishExcludeLambda
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "Excluded"
+              Default:
+                DisableRDPFromIpV4
+          - name: PublishExcludeLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "excluded",
+                  "resource_id": "{{FunctionName}}",
+                  "control_id": {{ControlId}},
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
           - name: RestrictLambda
             action: 'aws:executeScript'
             inputs:
               Runtime: python3.10
               Handler: script_handler
-              # Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  \r\n  client = boto3.client('lambda')\r\n  functionname = events['functionname']\r\n  accountID = events['accountID']\r\n  response = client.get_policy(FunctionName=functionname)\r\n  policy = response['Policy']\r\n  policy_json = json.loads(policy)\r\n  statements = policy_json['Statement']\r\n  \r\n  for statement in statements:\r\n      Principal = str(statement['Principal']).replace(\"{'Service': '\",\"\")[:-2]\r\n      Action = statement['Action']\r\n      Resource = statement['Resource']\r\n      StatementId = statement ['Sid']\r\n      NewStatementId = \"New\" + StatementId\r\n        \r\n      response_old = client.remove_permission(\r\n                   FunctionName=functionname,\r\n                   StatementId=StatementId\r\n      )\r\n\r\n      response = client.add_permission(\r\n                  FunctionName=functionname,\r\n                  StatementId=NewStatementId,\r\n                  Action=Action,\r\n                  Principal=Principal,\r\n                  SourceAccount= accountID\r\n      )"
               Script: "def script_handler(events, context):\r\n  import boto3\r\n  import json\r\n  \r\n  client = boto3.client('lambda')\r\n  functionname = events['functionname']\r\n  accountID = events['accountID']\r\n  response = client.get_policy(FunctionName=functionname)\r\n  policy = response['Policy']\r\n  policy_json = json.loads(policy)\r\n  statements = policy_json['Statement']\r\n  \r\n  for statement in statements:\r\n    if statement['Principal'] == \"*\":\r\n      response_old = client.remove_permission(\r\n        FunctionName=functionname,\r\n        StatementId=statement['Sid']\r\n      )\r\n      print(\"wildcard policy removed\")\r\n        \r\n    elif statement['Principal']['Service'] == 's3.amazonaws.com':\r\n      if 'Condition' not in statement:\r\n        response_old = client.remove_permission(\r\n          FunctionName=functionname,\r\n\r\n          StatementId=statement['Sid']\r\n        )\r\n      else:\r\n        print(\"not action required\")\r\n"
               InputPayload:
                 AutomationAssumeRole: '{{AutomationAssumeRole}}'
-                accountID: '{{accountID}}'
-                functionname: '{{functionname}}'
-          - name: PublishSNSNotification
-            action: aws:executeAwsApi
+                accountID: '{{AccountId}}'
+                functionname: '{{FunctionName}}'
+          - name: PublishRemediationLambda
+            action: 'aws:invokeLambdaFunction'
             inputs:
-              Service: sns
-              Api: Publish
-              TopicArn: "{{TopicArn}}"
-              Message: "{{Message}}, {{functionname}}"
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "remediated",
+                  "resource_id": "{{FunctionName}}",
+                  "control_id": {{ControlId}},
+                  "ddb_table": "{{InventoryTable}}"
+                }
             isEnd: true
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
@@ -79,19 +144,7 @@ Resources:
           StaticValue:
             Values: 
               - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
-        accountID:
-          StaticValue:
-            Values:
-              - !Ref 'AWS::AccountId'
-        TopicArn:
-          StaticValue:
-            Values: 
-              - !Ref TopicArn
-        Message:
-          StaticValue:
-            Values: 
-              - !Sub 'Notification from FTA-RestrictPublicLambda trigger in AccountID: ${AWS::AccountId} and Region: ${AWS::Region} by Lambda: '
-        functionname:
+        FunctionName:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
