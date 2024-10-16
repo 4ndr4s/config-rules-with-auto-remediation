@@ -158,10 +158,19 @@ Resources:
                 logger.info(f'No tags on resource, {resource_id}')
                 return "NotExcluded"
 
+      LoggingConfig:
+        LogGroup: !Ref LambdaLogGroup
       Runtime: python3.12
       Timeout: 15
 
   # Define the IAM role for the Lambda function
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupClass: INFREQUENT_ACCESS
+      LogGroupName: !Sub /aws/lambda/FTA-GetTagsbyResource-${AWS::Region}
+      RetentionInDays: 30
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
