@@ -6,10 +6,6 @@ Parameters:
     Type: String
     Default: "FTA-ConfigAutoRemediation"
     Description: role Name
-  TopicArn:
-    Type: String
-    Default: "arn:aws:sns:us-east-1:412090077236:FTA-Sec-Tooling-SNS-topic"
-    Description: topic ARN on Security Tooling
 
 Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -20,7 +16,7 @@ Resources:
     Properties:
       UpdateMethod: NewVersion
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessToRDSInstance
+      Name: FTA-DisablePublicAccessToRDSInstance-WithTags
       Content:
         description: >-
           ### Document name - AWSConfigRemediation-DisablePublicAccessToRDSInstance
@@ -46,15 +42,81 @@ Resources:
             type: String
             description: (Required) The resource identifier for the DB instance you want to disable public accessibility.
             allowedPattern: "db-[A-Z0-9]{26}"
-          TopicArn:
+          AwsService:
             type: String
-            description: (Required) The ARN of the SNS topic to publish the notification to.
-          Message:
+            default: 'rds'
+          AccountId:
             type: String
-            description: (Required) The message to include in the SNS notification.
+            default: !Sub ${AWS::AccountId}
+          ResourceType:
+            type: String
+            default: 'db'
+          Partition:
+            type: String
+            default: "aws"
+          ControlId:
+            type: String
+            default: "RDS.2"
+          GetTagsLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource-test"
+          GetInventoryLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+          ExclusionTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+          InventoryTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+          QuickSightS3:
+            type: String
+            default: "quick-sight-report-exclusion-622c56"
         outputs:
           - DisablePubliclyAccessibleOnRDS.Response
         mainSteps:
+          - name: 'InvokeMyLambdaFunction'
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetTagsLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "aws_service": "{{AwsService}}",
+                  "region": "${AWS::Region}",
+                  "resource_type": "{{ResourceType}}",
+                  "resource_id": "{{DbiResourceId}}",
+                  "partition": "{{Partition}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{ExclusionTable}}"
+                }
+          - name: LambdaOutputCheck
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: GetRDSInstanceIdentifier
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "NotExcluded"
+              - NextStep: PublishExcludeLambda
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "Excluded"
+              Default:
+                GetRDSInstanceIdentifier
+          - name: PublishExcludeLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "excluded",
+                  "resource_id": "{{DbiResourceId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
           -
             name: GetRDSInstanceIdentifier
             action: "aws:executeAwsApi"
@@ -155,13 +217,20 @@ Resources:
               PropertySelector: "$.DBInstances[0].PubliclyAccessible"
               DesiredValues:
                 - "False"
-          - name: PublishSNSNotification
-            action: aws:executeAwsApi
+          - name: PublishRemediationLambda
+            action: 'aws:invokeLambdaFunction'
             inputs:
-              Service: sns
-              Api: Publish
-              TopicArn: "{{TopicArn}}"
-              Message: "{{Message}}, {{ GetRDSInstanceIdentifier.DbInstanceIdentifier }}"
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "remediated",
+                  "resource_id": "{{DbiResourceId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
             isEnd: true
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
@@ -185,19 +254,9 @@ Resources:
           StaticValue:
             Values: 
               - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
-        TopicArn:
-          StaticValue:
-            Values: 
-              - !Ref TopicArn
-        Message:
-          StaticValue:
-            Values: 
-              - !Sub 'Notification from FTA-DisablePublicAccessToRDSInstance trigger in AccountID: ${AWS::AccountId} and Region: ${AWS::Region} by RDS: '
         DbiResourceId:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
       TargetId: !Ref DisablePublicAccessToRDSInstance
       TargetType: "SSM_DOCUMENT"
-
-

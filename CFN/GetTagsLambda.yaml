@@ -23,6 +23,7 @@ Resources:
 
 
           client = boto3.client('resourcegroupstaggingapi')
+          rds_client = boto3.client('rds')
 
 
           def get_resource_tags(partition, aws_service, aws_region, aws_account, aws_resource_type, aws_resource_id, aws_control_id):
@@ -49,12 +50,43 @@ Resources:
                     if tag['Key'] == aws_control_id
                 ]
               logger.info(tag_list)
-              # tag_list = [
-              #     tag for tag in response.get('ResourceTagMappingList', [{}])[0].get('Tags', [])
-              #     if tag['Key'] == aws_control_id
-              # ]
-
               return tag_list
+
+
+          def get_tags_by_filter(aws_service, aws_resource_type, aws_resource_id, aws_control_id):
+              # Create a Resource Groups Tagging API client
+              resource_list = []
+              pagination_token = ''
+              try:
+                  while True:
+                      # Call the get_resources method with the PaginationToken
+                      response = client.get_resources(
+                          ResourceTypeFilters=[f"{aws_service}:{aws_resource_type}"],
+                          PaginationToken=pagination_token
+                      )
+                      # Extract resources and their tags from the response
+                      resource_tag_mapping_list = response.get('ResourceTagMappingList', [])
+                      # Create a list of resources that contain the specified tag key
+                      resource_list.extend(
+                          resource for resource in resource_tag_mapping_list
+                          if 'Tags' in resource and any(tag['Key'] == aws_control_id for tag in resource['Tags'])
+                      )
+                      # Check if there is a next page
+                      pagination_token = response.get('PaginationToken')
+                      if not pagination_token:
+                          break  # Exit the loop if there are no more pages
+                  # Log the resource list
+                  logger.info(resource_list)
+                  for resource in resource_list:
+                      db_response = rds_client.describe_db_instances(
+                          DBInstanceIdentifier=resource['ResourceARN']
+                      )
+                      if db_response['DBInstances'] and db_response['DBInstances'][0]['DbiResourceId'] == aws_resource_id:
+                          return resource['Tags']
+
+              except Exception as e:
+                  logger.error(f"Error retrieving tags: {e}")
+                  return []
 
 
           def get_item_by_uuid_and_type(table_name, uuid, item_type):
@@ -101,6 +133,9 @@ Resources:
             elif aws_service in ['iam', 'cloudfront']:
                 list_of_tags = get_resource_tags(partition, aws_service=aws_service, aws_region='', aws_account=account_id,
                                             aws_resource_type=resource_type, aws_resource_id=resource_id, aws_control_id=control_id)
+            elif aws_service == 'rds':
+                list_of_tags = get_tags_by_filter(aws_service=aws_service, aws_resource_type=resource_type,
+                                                  aws_resource_id=resource_id, aws_control_id=control_id)
             else:
                 list_of_tags = get_resource_tags(partition, aws_service=aws_service, aws_region=region, aws_account=account_id,
                                             aws_resource_type=resource_type, aws_resource_id=resource_id, aws_control_id=control_id)
@@ -123,10 +158,19 @@ Resources:
                 logger.info(f'No tags on resource, {resource_id}')
                 return "NotExcluded"
 
+      LoggingConfig:
+        LogGroup: !Ref LambdaLogGroup
       Runtime: python3.12
       Timeout: 15
 
   # Define the IAM role for the Lambda function
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupClass: INFREQUENT_ACCESS
+      LogGroupName: !Sub /aws/lambda/FTA-GetTagsbyResource-${AWS::Region}
+      RetentionInDays: 30
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -152,6 +196,10 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - tag:GetResources
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
                 Resource: '*'
               - Effect: Allow
                 Action:

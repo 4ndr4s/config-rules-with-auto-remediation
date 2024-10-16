@@ -89,8 +89,17 @@ Resources:
               client.put_object(Body=file, Bucket=s3_bucket, Key=report)
               return data
 
+      LoggingConfig:
+        LogGroup: !Ref LambdaLogGroup
       Runtime: python3.12
       Timeout: 15
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupClass: INFREQUENT_ACCESS
+      LogGroupName: !Sub /aws/lambda/FTA-GetAccountInventory-${AWS::Region}
+      RetentionInDays: 30
 
   # Define the IAM role for the Lambda function
   LambdaExecutionRole:
