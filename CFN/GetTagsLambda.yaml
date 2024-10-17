@@ -167,7 +167,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupClass: INFREQUENT_ACCESS
+      LogGroupClass: STANDARD
       LogGroupName: !Sub /aws/lambda/FTA-GetTagsbyResource-${AWS::Region}
       RetentionInDays: 30
 
