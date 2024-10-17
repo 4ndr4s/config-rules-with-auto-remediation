@@ -125,7 +125,7 @@ Resources:
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: lambda-function-public-access-prohibited
+      ConfigRuleName: FTA-LambdaPublicAccessProhibited
       Description: Checks whether the Lambda function policy prohibits public access.
       Scope: 
         ComplianceResourceTypes: 

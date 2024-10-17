@@ -16,7 +16,7 @@ Resources:
     Properties:
       UpdateMethod: NewVersion
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessToRDSInstance-WithTags
+      Name: FTA-DisablePublicAccessToRDSInstances-WithTags
       Content:
         description: >-
           ### Document name - AWSConfigRemediation-DisablePublicAccessToRDSInstance
@@ -235,7 +235,7 @@ Resources:
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: rds-instance-public-access-check
+      ConfigRuleName: FTA-RDSInstancePublicAccessCheck
       Description: Checks if the Amazon Relational Database Service (Amazon RDS) instances are not publicly accessible. The rule is NON_COMPLIANT if the publiclyAccessible field is true in the instance configuration item.
       Scope: 
         ComplianceResourceTypes: 
