@@ -168,10 +168,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupClass: STANDARD
-      LogGroupName: !Join
-        - "-"
-        - - "/aws/lambda/FTA-GetTagsbyResource"
-          - !Select [-1, !Split ["-", !Ref "AWS::StackId"]]
+      LogGroupName: !Sub /aws/lambda/FTA-GetTagsbyResources-${AWS::Region}
       RetentionInDays: 30
 
   LambdaExecutionRole:
