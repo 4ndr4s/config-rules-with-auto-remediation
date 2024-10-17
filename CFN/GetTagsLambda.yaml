@@ -159,16 +159,19 @@ Resources:
                 return "NotExcluded"
 
       LoggingConfig:
-        LogGroup: !Ref LambdaLogGroups
+        LogGroup: !Ref LambdaLoggingGroup
       Runtime: python3.12
       Timeout: 15
 
   # Define the IAM role for the Lambda function
-  LambdaLogGroups:
+  LambdaLoggingGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupClass: STANDARD
-      LogGroupName: !Sub /aws/lambda/FTA-GetTagsbyResource-${AWS::Region}
+      LogGroupName: !Join
+        - "-"
+        - - "/aws/lambda/FTA-GetTagsbyResource"
+          - !Select [-1, !Split ["-", !Ref "AWS::StackId"]]
       RetentionInDays: 30
 
   LambdaExecutionRole:
