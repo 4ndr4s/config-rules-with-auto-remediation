@@ -90,19 +90,15 @@ Resources:
               return data
 
       LoggingConfig:
-        LogGroup: !Ref LambdaLogGroup
+        LogGroup: !Ref LambdaLoggingGroup
       Runtime: python3.12
       Timeout: 15
 
-  LambdaLogGroup:
+  LambdaLoggingGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupClass: STANDARD
-      # LogGroupName: !Sub /aws/lambda/FTA-GetAccountInventory-${AWS::Region}
-      LogGroupName: !Join
-        - "-"
-        - - "/aws/lambda/FTA-GetAccountInventory"
-          - !Select [-1, !Split ["-", !Ref "AWS::StackId"]]  # Get the last part of the stack ID
+      LogGroupName: !Sub /aws/lambda/FTA-GetAccountInventory-${AWS::Region}
       RetentionInDays: 30
 
   # Define the IAM role for the Lambda function
