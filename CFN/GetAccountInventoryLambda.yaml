@@ -97,7 +97,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupClass: INFREQUENT_ACCESS
+      LogGroupClass: STANDARD
       LogGroupName: !Sub /aws/lambda/FTA-GetAccountInventory-${AWS::Region}
       RetentionInDays: 30
 
