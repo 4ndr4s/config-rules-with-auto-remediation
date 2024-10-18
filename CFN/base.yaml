@@ -9,16 +9,16 @@ Parameters:
 
 Resources:
 
-  # cfnStackLambdaGetTags:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "GetTagsLambda.yaml"] ]
-  #     TimeoutInMinutes: 10
-  # cfnStackLambdaGetInventory:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "GetAccountInventoryLambda.yaml"] ]
-  #     TimeoutInMinutes: 10
+  cfnStackLambdaGetTags:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "GetTagsLambda.yaml"] ]
+      TimeoutInMinutes: 10
+  cfnStackLambdaGetInventory:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "GetAccountInventoryLambda.yaml"] ]
+      TimeoutInMinutes: 10
   cfnStackRDSTwo:
     Type: AWS::CloudFormation::Stack
     Properties:
