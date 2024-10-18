@@ -34,6 +34,7 @@ def create_stack_set(client, stack_set, template):
         response = client.create_stack_set(
             StackSetName=stack_set,
             Description='StackSet to deploy AWS Config Rules per account in designated regions',
+            Capabilities=[ 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND' ],
             TemplateURL=template,
             Tags=[
                 {
