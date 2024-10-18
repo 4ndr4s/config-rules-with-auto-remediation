@@ -25,7 +25,7 @@ def describe_stack_set(client, stack_set):
             logger.info("StackSet not found.")
             response = "StackSet not found"
         else:
-            logger.info("An error occurred:", e)
+            raise e
     return response
 
 
