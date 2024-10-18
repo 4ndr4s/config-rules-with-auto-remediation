@@ -75,6 +75,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
         "cloudformation:CreateStackSet",
         "cloudformation:UpdateStackSet",
         "cloudformation:DescribeStackSet",
+        "cloudformation:DescribeStackInstance",
         "cloudformation:CreateStackInstances",
         "cloudformation:UpdateStackInstances",
         "cloudformation:DescribeStackSetOperation",
