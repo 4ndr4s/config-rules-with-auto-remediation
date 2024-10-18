@@ -145,7 +145,6 @@ def list_stack_set_instances(client, stack_set, account_id):
             response = client.list_stack_instances(
                 StackSetName=stack_set,
                 StackInstanceAccount=account_id,
-                StackInstanceRegion='string',
                 CallAs='SELF'
             )['Summaries']
             stack_instances_status = [stack_id['StackInstanceStatus']['DetailedStatus'] for stack_id in response]
