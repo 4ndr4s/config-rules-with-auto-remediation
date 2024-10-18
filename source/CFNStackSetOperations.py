@@ -148,9 +148,9 @@ def describe_stack_set_instance(client, stack_set, account_id, aws_region):
                 StackInstanceRegion=aws_region,
                 CallAs='SELF'
             )
-            stack_instance_status = response['StackInstance']['StackInstanceStatus']
+            stack_instance_status = response['StackInstance']['StackInstanceStatus']['DetailedStatus']
             if stack_instance_status == 'RUNNING' or stack_instance_status == 'PENDING':
-                time.sleep(30)
+                time.sleep(60)
             else:
                 return stack_instance_status
     except botocore.exceptions.ClientError as e:
