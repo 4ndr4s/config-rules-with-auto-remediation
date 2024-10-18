@@ -147,7 +147,7 @@ def list_stack_set_instances(client, stack_set, account_id):
                 StackInstanceAccount=account_id,
                 StackInstanceRegion='string',
                 CallAs='SELF'
-            )
+            )['Summaries']
             stack_instances_status = [stack_id['StackInstanceStatus']['DetailedStatus'] for stack_id in response]
             if any(status in ["RUNNING", "PENDING"] for status in stack_instances_status):
                 logger.info("Waiting for stack instances to complete...")
