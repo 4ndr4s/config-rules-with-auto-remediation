@@ -139,6 +139,26 @@ def describe_stack_set_operation(client, stack_set, operation):
         raise e
 
 
+def describe_stack_set_instance(client, stack_set, account_id, aws_region):
+    try:
+        while True:
+            response = client.describe_stack_instance(
+                StackSetName=stack_set,
+                StackInstanceAccount=account_id,
+                StackInstanceRegion=aws_region,
+                CallAs='SELF'
+            )
+            stack_instance_status = response['StackInstance']['StackInstanceStatus']
+            if stack_instance_status == 'RUNNING' or stack_instance_status == 'PENDING':
+                time.sleep(30)
+            else:
+                return stack_instance_status
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == 'StackSetNotFoundException':
+            logger.info("StackSetNotFoundException not found.")
+        raise e
+
+
 def delete_stack_instances(client, account, regions, stack_set):
     try:
         response = client.delete_stack_instances(
@@ -183,6 +203,7 @@ def lambda_handler(event, context):
         "cloudformation",
         region_name=DEFAULT_REGION
     )
+    stack_instances_status = list()
 
     # Check stack set status
     stack_set_name = os.environ["StackSetName"] + "-" + account_id
@@ -215,6 +236,12 @@ def lambda_handler(event, context):
             else:
                 operation_id = create_stack_instances(cfn_client, account_id, regions, stack_set_name)['OperationId']
                 if describe_stack_set_operation(cfn_client, stack_set_name, operation_id) == "SUCCEEDED":
+                    for region in regions:
+                        status = describe_stack_set_instance(cfn_client, stack_set_name, account_id, region)
+                        stack_instances_status.append(status)
+                    logger.info(f"{account_id} stack instances status: {stack_instances_status}")
+                    if any(status != "SUCCEEDED" for status in stack_instances_status):
+                        return {"statusCode": 500, "account": event["account"]}
                     return {"statusCode": 200, "account": event["account"]}
                 else:
                     return {"statusCode": 500, "account": event["account"]}
@@ -222,6 +249,12 @@ def lambda_handler(event, context):
             # operation_id = update_stack_instances(cfn_client, account_id, regions, stack_set_name)['OperationId']
             operation_id = update_stack_set(cfn_client, stack_set_name, template_url)['OperationId']
             if describe_stack_set_operation(cfn_client, stack_set_name, operation_id) == "SUCCEEDED":
+                for region in regions:
+                    status = describe_stack_set_instance(cfn_client, stack_set_name, account_id, region)
+                    stack_instances_status.append(status)
+                logger.info(f"{account_id} stack instances status: {stack_instances_status}")
+                if any(status != "SUCCEEDED" for status in stack_instances_status):
+                    return {"statusCode": 500, "account": event["account"]}
                 return {"statusCode": 200, "account": event["account"]}
             else:
                 return {"statusCode": 500, "account": event["account"]}
