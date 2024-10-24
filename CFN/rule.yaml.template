@@ -8,17 +8,165 @@ Parameters:
     Description: role Name
 
 Resources:
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  # [CONTROL.ID] description
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  DisablePublicAccessForSecurityGroup:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Name: FTA-RuleName
+      Content:
+        description: >-
+          ## Ddescription of SSM document.
+        schemaVersion: '0.3'
+        assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        parameters:
+          AwsService:
+            type: String
+            default: 'ec2'
+          AccountId:
+            type: String
+            default: !Sub ${AWS::AccountId}
+          ResourceType:
+            type: String
+            default: 'security-group'
+          Region:
+            type: String
+            default: !Sub ${AWS::Region}
+          Partition:
+            type: String
+            default: "aws"
+          ControlId:
+            type: String
+            default: "EC2.14"
+          AutomationAssumeRole:
+            type: String
+            default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+          ResourceId:
+            type: String
+            description: (Required) Security Group ID
+            allowedPattern: ^([s][g]\-)([0-9a-f]){1,}$
+          IpAddressToBlock:
+            type: String
+            description: (Optional) Additional Ipv4 or Ipv6 address to block access from (ex:1.2.3.4/32)
+            allowedPattern: (^$)|^((25[0-5]|(2[0-4]\d|[0-1]?\d?\d)(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3})|(^((?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?)::((?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?))|(^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}))\/(25[0-5]|2[0-4]\d|[0-1]?\d?\d)$
+            default: ""
+          GetTagsLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+          GetInventoryLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+          ExclusionTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+          InventoryTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+          QuickSightS3:
+            type: String
+            default: "quick-sight-report-exclusion-622c56"
+        mainSteps:
+          - action: 'aws:invokeLambdaFunction'
+            name: 'InvokeMyLambdaFunction'
+            inputs:
+              FunctionName: '{{GetTagsLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "aws_service": "{{AwsService}}",
+                  "region": "${AWS::Region}",
+                  "resource_type": "{{ResourceType}}",
+                  "resource_id": "{{ResourceId}}",
+                  "partition": "{{Partition}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{ExclusionTable}}"
+                }
+          - name: LambdaOutputCheck
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: DisableRDPFromIpV4
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "NotExcluded"
+              - NextStep: DisableRDPFromIpV6
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "NotExcluded"
+              - NextStep: PublishExcludeLambda
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "Excluded"
+              Default:
+                DisableRDPFromIpV4
+          - name: PublishExcludeLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "excluded",
+                  "resource_id": "{{ResourceId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
+          - name: DisableRDPFromIpV4
+            action: "aws:executeAwsApi"
+            inputs:
+              Service: ec2
+              Api: RevokeSecurityGroupIngress
+              GroupId: "{{ResourceId}}"
+              IpPermissions:
+                - IpProtocol: tcp
+                  FromPort: 3389
+                  ToPort: 3389
+                  IpRanges:
+                    - CidrIp: 0.0.0.0/0
+            onFailure: Continue
+          - name: DisableRDPFromIpV6
+            action: "aws:executeAwsApi"
+            inputs:
+              Service: ec2
+              Api: RevokeSecurityGroupIngress
+              GroupId: "{{ResourceId}}"
+              IpPermissions:
+                - IpProtocol: tcp
+                  FromPort: 3389
+                  ToPort: 3389
+                  Ipv6Ranges:
+                    - CidrIpv6: "::/0"
+            onFailure: Continue
+          - name: PublishRemediationLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "remediated",
+                  "resource_id": "{{ResourceId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: <Name>
-      Description: <Description>
+      ConfigRuleName: FTA-RestrictRDPPublicAccess-Tags
+      Description: Restrict public access to 3389 port
+      InputParameters:
+        blockedPort1: 3389
       Scope: 
         ComplianceResourceTypes: 
-          - <Compliance resources>
+          - AWS::EC2::SecurityGroup
       Source:
           Owner: AWS
-          SourceIdentifier: <Managed Rule Name>
+          SourceIdentifier: <REPLACE-CONFIG-RULE-SOURCE>
   ConfigAutoremediation:
     Type: AWS::Config::RemediationConfiguration
     Properties:
@@ -30,9 +178,9 @@ Resources:
           StaticValue:
             Values: 
               - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
-        <Resource to evaluate>:
+        ResourceId:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
-      TargetId: <SSM Document Name>
+      TargetId: !Ref DisablePublicAccessForSecurityGroup
       TargetType: "SSM_DOCUMENT"

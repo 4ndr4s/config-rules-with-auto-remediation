@@ -84,6 +84,30 @@ To enable auto-remediation, please follow the steps outlined below:
         - PublishExcludeLambda: This Lambda function publishes the resource information to the excluded folder in S3.
         - PublishRemediationLambda: This Lambda function publishes the resource information to the remediated folder in S3.
 
+### specific parameters
+| :exclamation: NOTE          |
+|:---------------------------|
+| **Parameters described below need to be updated based on each r** |
+
+> 1. `AwsService` Needs to match the service portion of the resource ARN [ARN format](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html)
+> 2. `ResourceType` Needs to match the resource-type portion of the resource ARN, there are some resources that do not use resource-type, leave empty if not required
+> 3. `ControlId` Needs to match the control that needs to be remediated
+> 4. `ResourceId` ResourceId that is going to be remediated, this will depends of the rule we are implementing, it will change across the rules.
+```
+    AwsService:
+        type: String
+        default: 'ec2'
+    ResourceType:
+        type: String
+        default: 'security-group'
+    ControlId:
+        type: String
+        default: "EC2.14"
+    ResourceId:
+        type: String
+        description: (Required) Security Group ID
+        allowedPattern: ^([s][g]\-)([0-9a-f]){1,}$
+```
 
 ### LambdaOutputCheck
 | :exclamation: NOTE          |
