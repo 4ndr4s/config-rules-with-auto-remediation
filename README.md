@@ -87,10 +87,10 @@ To enable auto-remediation, please follow the steps outlined below:
 ### specific parameters
 | :exclamation: NOTE          |
 |:---------------------------|
-| **Parameters described below need to be updated based on each r** |
+| **Parameters described below need to be updated based on each rule** |
 
 > 1. `AwsService` Needs to match the service portion of the resource ARN [ARN format](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html)
-> 2. `ResourceType` Needs to match the resource-type portion of the resource ARN, there are some resources that do not use resource-type, leave empty if not required
+> 2. `ResourceType` Needs to match the resource-type portion of the resource ARN, there are some resources that do not use resource-type, leave empty if not required [Resource Types](https://docs.aws.amazon.com/service-authorization/latest/reference/reference_policies_actions-resources-contextkeys.html)
 > 3. `ControlId` Needs to match the control that needs to be remediated
 > 4. `ResourceId` ResourceId that is going to be remediated, this will depends of the rule we are implementing, it will change across the rules.
 ```

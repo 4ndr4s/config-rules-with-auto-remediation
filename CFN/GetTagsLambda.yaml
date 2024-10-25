@@ -28,10 +28,10 @@ Resources:
 
           def get_resource_tags(partition, aws_service, aws_region, aws_account, aws_resource_type, aws_resource_id, aws_control_id):
               # Construct the ARN based on whether aws_account is provided
-              if aws_account:
+              if aws_resource_type:
                   resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_type}/{aws_resource_id}'
               else:
-                  resource_arn = f'arn:{partition}:{aws_service}:::{aws_resource_id}'
+                  resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_id}'
 
               try:
                   # Fetch the resource tags
@@ -127,13 +127,7 @@ Resources:
             item = dict()
 
             # Determine the parameters for get_resource_tags based on the service
-            if aws_service == 's3':
-                list_of_tags = get_resource_tags(partition, aws_service='s3', aws_region='', aws_account='', aws_resource_type='',
-                                            aws_resource_id=resource_id, aws_control_id=control_id)
-            elif aws_service in ['iam', 'cloudfront']:
-                list_of_tags = get_resource_tags(partition, aws_service=aws_service, aws_region='', aws_account=account_id,
-                                            aws_resource_type=resource_type, aws_resource_id=resource_id, aws_control_id=control_id)
-            elif aws_service == 'rds':
+            if aws_service == 'rds':
                 list_of_tags = get_tags_by_filter(aws_service=aws_service, aws_resource_type=resource_type,
                                                   aws_resource_id=resource_id, aws_control_id=control_id)
             else:
