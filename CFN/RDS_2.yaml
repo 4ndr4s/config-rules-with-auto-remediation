@@ -9,7 +9,7 @@ Parameters:
 
 Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
-  # [EC2.14] Security groups should not allow ingress from 0.0.0.0/0 or ::/0 to port 3389
+  # [RDS.2] RDS DB Instances should prohibit public access, as determined by the PubliclyAccessible configuration
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
   DisablePublicAccessToRDSInstance:
     Type: AWS::SSM::Document
