@@ -57,7 +57,7 @@ Resources:
             default: "RDS.1"
           GetTagsLambda:
             type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource-test"
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
           GetInventoryLambda:
             type: String
             default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
