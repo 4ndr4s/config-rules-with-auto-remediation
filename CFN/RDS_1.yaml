@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Config rule for SSH and RDP
+
+Parameters:
+  AutomationRoleName:
+    Type: String
+    Default: "FTA-ConfigAutoRemediation"
+    Description: role Name
+
+Resources:
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  # [RDS.1] RDS snapshot should be private
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  SSMDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      UpdateMethod: NewVersion
+      DocumentType: Automation
+      Name: FTA-DisablePublicAccessToRDSSnapshot-WithTag
+      Content:
+        description: >-
+          ### Document name - FTA-DisablePublicAccessToRDSSnapshot
+
+          ## What does this document do?
+          The AWSSupport-ModifyRDSSnapshotPermission document will allow to automatically modify permissions of multiple RDS snapshots from Public to Private
+           or share RDS snapshots with other accounts. Snapshots encrypted with your default KMS key cannot be shared with other accounts automatically. 
+           For more information about modifying snapshot permissions, see Sharing a DB snapshot in the RDS Public Document
+
+          ## Input Parameters
+          * AutomationAssumeRole: (Required) The Amazon Resource Name (ARN) of the AWS Identity and Access Management (IAM) role that allows Systems Manager Automation to perform the actions on your behalf.
+          * ResourceId: (Required) The resource identifier for the snapshot you want to disable public accessibility.
+
+        schemaVersion: '0.3'
+        assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        parameters:
+          AutomationAssumeRole:
+            type: String
+            description: (Required) The Amazon Resource Name (ARN) of the AWS Identity and Access Management (IAM) role that allows Systems Manager Automation to perform the actions on your behalf.
+            allowedPattern: ^arn:aws[a-z0-9-]*:iam::\d{12}:role\/[\w-\/.@+=,]{1,1017}$
+          ResourceId:
+            type: String
+            description: Enter a DB snapshot Identifiers.
+            allowedPattern: "^$|^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$|^rds:[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
+          AwsService:
+            type: String
+            default: 'rds'
+          AccountId:
+            type: String
+            default: !Sub ${AWS::AccountId}
+          ResourceType:
+            type: String
+          Partition:
+            type: String
+            default: "aws"
+          ControlId:
+            type: String
+            default: "RDS.1"
+          GetTagsLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+          GetInventoryLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+          ExclusionTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+          InventoryTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+          QuickSightS3:
+            type: String
+            default: "quick-sight-report-exclusion-622c56"
+        mainSteps:
+          - name: 'InvokeMyLambdaFunction'
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetTagsLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "aws_service": "{{AwsService}}",
+                  "region": "${AWS::Region}",
+                  "resource_type": "{{ResourceType}}",
+                  "resource_id": "{{ResourceId}}",
+                  "partition": "{{Partition}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{ExclusionTable}}"
+                }
+          - name: LambdaOutputCheck
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: MakeSnapshotPrivate
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "NotExcluded"
+              - NextStep: PublishExcludeLambda
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "Excluded"
+              Default:
+                MakeSnapshotPrivate
+          - name: PublishExcludeLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "excluded",
+                  "resource_id": "{{ResourceId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
+          -
+            name: MakeSnapshotPrivate
+            action: 'aws:executeScript'
+            inputs:
+              Runtime: python3.11
+              Handler: script_handler
+              # Script: "import boto3\nimport botocore\n\ndef script_handler(events, context):\n    client = boto3.client(\"rds\")\n    snapshot_id = events[\"Snapshot_Id\"]\n    result = {}\n    try:\n        response = client.modify_db_snapshot_attribute(DBSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        if response[\"ResponseMetadata\"][\"HTTPStatusCode\"] == 200:\n            result[snapshot_id] = \"Snapshot is successfully changed to Private\"\n        else:\n            result[snapshot_id] = \"Failed to change snapshot to Private\"\n    except botocore.exceptions.ClientError as error:\n        result[snapshot_id] = f\"Failed - {str(error)}\"\n    return {\"Result\": result}"
+              Script: "import boto3\nimport botocore\n\ndef script_handler(events, context):\n    client = boto3.client(\"rds\")\n    snapshot_id = events[\"Snapshot_Id\"]\n    resource_type = events[\"ResourceType\"]\n    result = {}\n    try:\n        if resource_type == 'snapshot':\n            response = client.modify_db_snapshot_attribute(DBSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        elif resource_type == 'cluster-snapshot':\n            response = client.modify_db_cluster_snapshot_attribute(DBClusterSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        if response[\"ResponseMetadata\"][\"HTTPStatusCode\"] == 200:\n            result[snapshot_id] = \"Snapshot is successfully changed to Private\"\n        else:\n            result[snapshot_id] = \"Failed to change snapshot to Private\"\n    except botocore.exceptions.ClientError as error:\n        result[snapshot_id] = f\"Failed - {str(error)}\"\n    return {\"Result\": result}"
+              InputPayload:
+                Snapshot_Id: '{{ResourceId}}'
+                ResourceType: '{{ResourceType}}'
+          - name: PublishRemediationLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "remediated",
+                  "resource_id": "{{ResourceId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
+  AWSConfigRuleDB:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: FTA-RDSDBSnapshotsPublicProhibited
+      Description: Checks if Amazon Relational Database Service (Amazon RDS) snapshots are public. The rule is non-compliant if any existing and new Amazon RDS snapshots are public.
+      Scope: 
+        ComplianceResourceTypes:
+          - AWS::RDS::DBSnapshot
+      Source:
+          Owner: AWS
+          SourceIdentifier: RDS_SNAPSHOTS_PUBLIC_PROHIBITED
+  ConfigAutoremediationDB:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref AWSConfigRuleDB
+      MaximumAutomaticAttempts: 3
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: 
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        ResourceId:
+          ResourceValue:
+            Value: RESOURCE_ID
+        ResourceType:
+          StaticValue:
+            Values: 
+              - "snapshot"
+      RetryAttemptSeconds: 30
+      TargetId: !Ref SSMDocument
+      TargetType: "SSM_DOCUMENT"
+  AWSConfigRuleCluster:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: FTA-RDSClusterSnapshotsPublicProhibited
+      Description: Checks if Amazon Relational Database Service (Amazon RDS) snapshots are public. The rule is non-compliant if any existing and new Amazon RDS snapshots are public.
+      Scope: 
+        ComplianceResourceTypes:
+          - AWS::RDS::DBClusterSnapshot
+      Source:
+          Owner: AWS
+          SourceIdentifier: RDS_SNAPSHOTS_PUBLIC_PROHIBITED
+  ConfigAutoremediationCluster:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref AWSConfigRuleCluster
+      MaximumAutomaticAttempts: 3
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: 
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        ResourceId:
+          ResourceValue:
+            Value: RESOURCE_ID
+        ResourceType:
+          StaticValue:
+            Values: 
+              - "cluster-snapshot"
+      RetryAttemptSeconds: 30
+      TargetId: !Ref SSMDocument
+      TargetType: "SSM_DOCUMENT"

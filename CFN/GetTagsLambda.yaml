@@ -9,11 +9,15 @@ Resources:
       FunctionName: FTA-GetTagsbyResource
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SERVICE_LIST: "[ 'rds', 'lambda', 'logs', 'states']"
       Code:
         ZipFile: |
           import boto3
           import logging
           import sys
+          import os
           from botocore.exceptions import ClientError
 
           # Setting up logger
@@ -24,11 +28,19 @@ Resources:
 
           client = boto3.client('resourcegroupstaggingapi')
           rds_client = boto3.client('rds')
+          # Initialize a session using your AWS credentials
+          session = boto3.Session(region_name='us-east-1')
+          dynamodb = session.resource('dynamodb')
+
+          #Environment Variables
+          service_list = os.environ["SERVICE_LIST"]
 
 
           def get_resource_tags(partition, aws_service, aws_region, aws_account, aws_resource_type, aws_resource_id, aws_control_id):
               # Construct the ARN based on whether aws_account is provided
-              if aws_resource_type:
+              if aws_service in service_list:
+                  resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_type}:{aws_resource_id}'
+              elif aws_resource_type:
                   resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_type}/{aws_resource_id}'
               else:
                   resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_id}'
@@ -39,7 +51,7 @@ Resources:
               except Exception as e:
                   # Handle exceptions (e.g., logging the error)
                   logger.error(f"Error fetching resource tags: {e}")
-                  return []  # Return an empty list or handle as needed
+                  raise e
 
               # Extract tags that start with the service name
               tag_list = []
@@ -90,10 +102,6 @@ Resources:
 
 
           def get_item_by_uuid_and_type(table_name, uuid, item_type):
-              # Initialize a session using your AWS credentials
-              session = boto3.Session(region_name='us-east-1')
-              dynamodb = session.resource('dynamodb')
-
               # Reference the DynamoDB table
               table = dynamodb.Table(table_name)
 
@@ -127,7 +135,7 @@ Resources:
             item = dict()
 
             # Determine the parameters for get_resource_tags based on the service
-            if aws_service == 'rds':
+            if aws_service == 'db':
                 list_of_tags = get_tags_by_filter(aws_service=aws_service, aws_resource_type=resource_type,
                                                   aws_resource_id=resource_id, aws_control_id=control_id)
             else:
