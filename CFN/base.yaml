@@ -34,3 +34,8 @@ Resources:
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "EC2_14.yaml"] ]
       TimeoutInMinutes: 10
+  cfnStackRDSOne:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "RDS_1.yaml"] ]
+      TimeoutInMinutes: 10
