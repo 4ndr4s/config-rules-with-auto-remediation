@@ -10,11 +10,11 @@ Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
   # [Lambda.1] Lambda functions should prohibit public access
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
-  RestrictPublicLambda:
+  SSMDocument:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-RestrictPublicLambdaAccess-WithTags
+      Name: FTA-RestrictPublicLambdaAccess
       Content:
         schemaVersion: '0.3'
         assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
@@ -24,18 +24,12 @@ Resources:
             default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
           FunctionName:
             type: String
-          AwsService:
-            type: String
-            default: 'lambda'
           AccountId:
             type: String
             default: !Sub ${AWS::AccountId}
           ResourceType:
             type: String
-            default: 'function'
-          Partition:
-            type: String
-            default: "aws"
+            default: 'AWS::Lambda::Function'
           ControlId:
             type: String
             default: "Lambda.1"
@@ -62,8 +56,6 @@ Resources:
               Payload: !Sub |
                 {
                   "account_id": ${AWS::AccountId},
-                  "aws_service": "{{AwsService}}",
-                  "region": "${AWS::Region}",
                   "resource_type": "{{ResourceType}}",
                   "resource_id": "{{FunctionName}}",
                   "partition": "{{Partition}}",
@@ -148,5 +140,5 @@ Resources:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
-      TargetId: !Ref RestrictPublicLambda
+      TargetId: !Ref SSMDocument
       TargetType: "SSM_DOCUMENT"
