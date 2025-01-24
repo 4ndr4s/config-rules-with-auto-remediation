@@ -58,7 +58,6 @@ Resources:
                   "account_id": ${AWS::AccountId},
                   "resource_type": "{{ResourceType}}",
                   "resource_id": "{{FunctionName}}",
-                  "partition": "{{Partition}}",
                   "control_id": "{{ControlId}}",
                   "ddb_table": "{{ExclusionTable}}"
                 }
