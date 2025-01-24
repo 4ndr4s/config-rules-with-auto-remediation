@@ -11,12 +11,11 @@ Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
   # [RDS.2] RDS DB Instances should prohibit public access, as determined by the PubliclyAccessible configuration
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
-  DisablePublicAccessToRDSInstance:
+  SSMDocument:
     Type: AWS::SSM::Document
     Properties:
-      UpdateMethod: NewVersion
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessToRDSInstances-WithTags
+      Name: FTA-DisablePublicAccessToRDSInstances
       Content:
         description: >-
           ### Document name - AWSConfigRemediation-DisablePublicAccessToRDSInstance
@@ -42,18 +41,12 @@ Resources:
             type: String
             description: (Required) The resource identifier for the DB instance you want to disable public accessibility.
             allowedPattern: "db-[A-Z0-9]{26}"
-          AwsService:
-            type: String
-            default: 'rds'
           AccountId:
             type: String
             default: !Sub ${AWS::AccountId}
           ResourceType:
             type: String
-            default: 'db'
-          Partition:
-            type: String
-            default: "aws"
+            default: 'AWS::RDS::DBInstance'
           ControlId:
             type: String
             default: "RDS.2"
@@ -82,11 +75,8 @@ Resources:
               Payload: !Sub |
                 {
                   "account_id": ${AWS::AccountId},
-                  "aws_service": "{{AwsService}}",
-                  "region": "${AWS::Region}",
                   "resource_type": "{{ResourceType}}",
                   "resource_id": "{{DbiResourceId}}",
-                  "partition": "{{Partition}}",
                   "control_id": "{{ControlId}}",
                   "ddb_table": "{{ExclusionTable}}"
                 }
@@ -258,5 +248,5 @@ Resources:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
-      TargetId: !Ref DisablePublicAccessToRDSInstance
+      TargetId: !Ref SSMDocument
       TargetType: "SSM_DOCUMENT"
