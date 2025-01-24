@@ -16,7 +16,7 @@ Resources:
     Properties:
       UpdateMethod: NewVersion
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessToRDSSnapshot-WithTag
+      Name: FTA-DisablePublicAccessToRDSSnapshot
       Content:
         description: >-
           ### Document name - FTA-DisablePublicAccessToRDSSnapshot
@@ -41,17 +41,11 @@ Resources:
             type: String
             description: Enter a DB snapshot Identifiers.
             allowedPattern: "^$|^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$|^rds:[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
-          AwsService:
-            type: String
-            default: 'rds'
           AccountId:
             type: String
             default: !Sub ${AWS::AccountId}
           ResourceType:
             type: String
-          Partition:
-            type: String
-            default: "aws"
           ControlId:
             type: String
             default: "RDS.1"
@@ -78,11 +72,8 @@ Resources:
               Payload: !Sub |
                 {
                   "account_id": ${AWS::AccountId},
-                  "aws_service": "{{AwsService}}",
-                  "region": "${AWS::Region}",
                   "resource_type": "{{ResourceType}}",
                   "resource_id": "{{ResourceId}}",
-                  "partition": "{{Partition}}",
                   "control_id": "{{ControlId}}",
                   "ddb_table": "{{ExclusionTable}}"
                 }
@@ -113,14 +104,13 @@ Resources:
                   "ddb_table": "{{InventoryTable}}"
                 }
             isEnd: true
-          -
-            name: MakeSnapshotPrivate
+          - name: MakeSnapshotPrivate
             action: 'aws:executeScript'
             inputs:
               Runtime: python3.11
               Handler: script_handler
               # Script: "import boto3\nimport botocore\n\ndef script_handler(events, context):\n    client = boto3.client(\"rds\")\n    snapshot_id = events[\"Snapshot_Id\"]\n    result = {}\n    try:\n        response = client.modify_db_snapshot_attribute(DBSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        if response[\"ResponseMetadata\"][\"HTTPStatusCode\"] == 200:\n            result[snapshot_id] = \"Snapshot is successfully changed to Private\"\n        else:\n            result[snapshot_id] = \"Failed to change snapshot to Private\"\n    except botocore.exceptions.ClientError as error:\n        result[snapshot_id] = f\"Failed - {str(error)}\"\n    return {\"Result\": result}"
-              Script: "import boto3\nimport botocore\n\ndef script_handler(events, context):\n    client = boto3.client(\"rds\")\n    snapshot_id = events[\"Snapshot_Id\"]\n    resource_type = events[\"ResourceType\"]\n    result = {}\n    try:\n        if resource_type == 'snapshot':\n            response = client.modify_db_snapshot_attribute(DBSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        elif resource_type == 'cluster-snapshot':\n            response = client.modify_db_cluster_snapshot_attribute(DBClusterSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        if response[\"ResponseMetadata\"][\"HTTPStatusCode\"] == 200:\n            result[snapshot_id] = \"Snapshot is successfully changed to Private\"\n        else:\n            result[snapshot_id] = \"Failed to change snapshot to Private\"\n    except botocore.exceptions.ClientError as error:\n        result[snapshot_id] = f\"Failed - {str(error)}\"\n    return {\"Result\": result}"
+              Script: "import boto3\nimport botocore\n\ndef script_handler(events, context):\n    client = boto3.client(\"rds\")\n    snapshot_id = events[\"Snapshot_Id\"]\n    resource_type = events[\"ResourceType\"]\n    result = {}\n    try:\n        if resource_type == 'AWS::RDS::DBSnapshot':\n            response = client.modify_db_snapshot_attribute(DBSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        elif resource_type == 'AWS::RDS::DBClusterSnapshot':\n            response = client.modify_db_cluster_snapshot_attribute(DBClusterSnapshotIdentifier=snapshot_id, AttributeName=\"restore\", ValuesToRemove=[\"all\"])\n        if response[\"ResponseMetadata\"][\"HTTPStatusCode\"] == 200:\n            result[snapshot_id] = \"Snapshot is successfully changed to Private\"\n        else:\n            result[snapshot_id] = \"Failed to change snapshot to Private\"\n    except botocore.exceptions.ClientError as error:\n        result[snapshot_id] = f\"Failed - {str(error)}\"\n    return {\"Result\": result}"
               InputPayload:
                 Snapshot_Id: '{{ResourceId}}'
                 ResourceType: '{{ResourceType}}'
@@ -142,7 +132,7 @@ Resources:
   AWSConfigRuleDB:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: FTA-RDSDBSnapshotsPublicProhibited
+      ConfigRuleName: FTA-RDSDBSnapshotsPublicProhibited1
       Description: Checks if Amazon Relational Database Service (Amazon RDS) snapshots are public. The rule is non-compliant if any existing and new Amazon RDS snapshots are public.
       Scope: 
         ComplianceResourceTypes:
@@ -167,7 +157,7 @@ Resources:
         ResourceType:
           StaticValue:
             Values: 
-              - "snapshot"
+              - "AWS::RDS::DBSnapshot"
       RetryAttemptSeconds: 30
       TargetId: !Ref SSMDocument
       TargetType: "SSM_DOCUMENT"
@@ -199,7 +189,7 @@ Resources:
         ResourceType:
           StaticValue:
             Values: 
-              - "cluster-snapshot"
+              - "AWS::RDS::DBClusterSnapshot"
       RetryAttemptSeconds: 30
       TargetId: !Ref SSMDocument
       TargetType: "SSM_DOCUMENT"

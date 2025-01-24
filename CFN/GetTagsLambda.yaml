@@ -9,15 +9,11 @@ Resources:
       FunctionName: FTA-GetTagsbyResource
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          SERVICE_LIST: "[ 'rds', 'lambda', 'logs', 'states']"
       Code:
         ZipFile: |
           import boto3
           import logging
           import sys
-          import os
           from botocore.exceptions import ClientError
 
           # Setting up logger
@@ -26,85 +22,47 @@ Resources:
           logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 
-          client = boto3.client('resourcegroupstaggingapi')
-          rds_client = boto3.client('rds')
-          # Initialize a session using your AWS credentials
-          session = boto3.Session(region_name='us-east-1')
-          dynamodb = session.resource('dynamodb')
-
-          #Environment Variables
-          service_list = os.environ["SERVICE_LIST"]
+          tags_client = boto3.client('resourcegroupstaggingapi')
+          config_client = boto3.client('config')
+          dynamodb = boto3.resource('dynamodb')
 
 
-          def get_resource_tags(partition, aws_service, aws_region, aws_account, aws_resource_type, aws_resource_id, aws_control_id):
-              # Construct the ARN based on whether aws_account is provided
-              if aws_service in service_list:
-                  resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_type}:{aws_resource_id}'
-              elif aws_resource_type:
-                  resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_type}/{aws_resource_id}'
-              else:
-                  resource_arn = f'arn:{partition}:{aws_service}:{aws_region}:{aws_account}:{aws_resource_id}'
+          def get_resource_config_history(aws_resource_type, aws_resource_id):
+              try:
+                  response = config_client.get_resource_config_history(
+                      resourceType=aws_resource_type,
+                      resourceId=aws_resource_id
+                  )
+                  return response.get("configurationItems")[0].get("arn")
+              except Exception as e:
+                  logger.error(f"Error retrieving resource config history: {e}")
+                  return []
 
+
+          def get_resource_tags(resource_arn, aws_control_id):
               try:
                   # Fetch the resource tags
-                  response = client.get_resources(ResourceARNList=[resource_arn])
+                  response = tags_client.get_resources(ResourceARNList=[resource_arn])
               except Exception as e:
                   # Handle exceptions (e.g., logging the error)
                   logger.error(f"Error fetching resource tags: {e}")
-                  raise e
+                  return []  # Return an empty list or handle as needed
 
               # Extract tags that start with the service name
               tag_list = []
               resource_tag_mapping_list = response.get('ResourceTagMappingList', [{}])
               if resource_tag_mapping_list and 'Tags' in resource_tag_mapping_list[0]:
-                tag_list = [
-                    tag for tag in resource_tag_mapping_list[0]['Tags']
-                    if tag['Key'] == aws_control_id
-                ]
+                  tag_list = [
+                      tag for tag in resource_tag_mapping_list[0]['Tags']
+                      if tag['Key'] == aws_control_id
+                  ]
               logger.info(tag_list)
               return tag_list
-
-
-          def get_tags_by_filter(aws_service, aws_resource_type, aws_resource_id, aws_control_id):
-              # Create a Resource Groups Tagging API client
-              resource_list = []
-              pagination_token = ''
-              try:
-                  while True:
-                      # Call the get_resources method with the PaginationToken
-                      response = client.get_resources(
-                          ResourceTypeFilters=[f"{aws_service}:{aws_resource_type}"],
-                          PaginationToken=pagination_token
-                      )
-                      # Extract resources and their tags from the response
-                      resource_tag_mapping_list = response.get('ResourceTagMappingList', [])
-                      # Create a list of resources that contain the specified tag key
-                      resource_list.extend(
-                          resource for resource in resource_tag_mapping_list
-                          if 'Tags' in resource and any(tag['Key'] == aws_control_id for tag in resource['Tags'])
-                      )
-                      # Check if there is a next page
-                      pagination_token = response.get('PaginationToken')
-                      if not pagination_token:
-                          break  # Exit the loop if there are no more pages
-                  # Log the resource list
-                  logger.info(resource_list)
-                  for resource in resource_list:
-                      db_response = rds_client.describe_db_instances(
-                          DBInstanceIdentifier=resource['ResourceARN']
-                      )
-                      if db_response['DBInstances'] and db_response['DBInstances'][0]['DbiResourceId'] == aws_resource_id:
-                          return resource['Tags']
-
-              except Exception as e:
-                  logger.error(f"Error retrieving tags: {e}")
-                  return []
 
 
           def get_item_by_uuid_and_type(table_name, uuid, item_type):
               # Reference the DynamoDB table
               table = dynamodb.Table(table_name)
-
               try:
                   # Get the item from the table using the UUID and Type as keys
                   response = table.get_item(
@@ -121,44 +79,38 @@ Resources:
               if 'Item' in response:
                   return response['Item']
               else:
-                  logger.info("Item not found.")
+                  logger.error("Item not found.")
                   return None
+
+
           def lambda_handler(event, context):
-            aws_service = event.get('aws_service', '')
-            resource_id = event.get('resource_id', '')
-            account_id = event.get('account_id', '')
-            resource_type = event.get('resource_type', '')
-            region = event.get('region', '')
-            partition = event.get('partition', '')
-            control_id = event.get('control_id', '')
-            table_name = event.get('ddb_table', '')
-            item = dict()
-
-            # Determine the parameters for get_resource_tags based on the service
-            if aws_service == 'db':
-                list_of_tags = get_tags_by_filter(aws_service=aws_service, aws_resource_type=resource_type,
-                                                  aws_resource_id=resource_id, aws_control_id=control_id)
-            else:
-                list_of_tags = get_resource_tags(partition, aws_service=aws_service, aws_region=region, aws_account=account_id,
-                                            aws_resource_type=resource_type, aws_resource_id=resource_id, aws_control_id=control_id)
-
-            if list_of_tags:
-                for tag in list_of_tags:
-                    logger.info(tag['Value'])
-                    item = get_item_by_uuid_and_type(table_name, tag['Value'], tag['Key'])
-                    logger.info(item)
-                if item is None:
-                    logger.info("not valid tag exclusion, running auto remediation")
-                    return "NotExcluded"
-                if str(account_id) in item['AccountId']:
-                    logger.info(f'excluding resource: {resource_id} on {account_id}')
-                    return "Excluded"
-                else:
-                    logger.info("not valid exclusion, running auto remediation")
-                    return "NotExcluded"
-            else:
-                logger.info(f'No tags on resource, {resource_id}')
-                return "NotExcluded"
+              resource_id = event.get('resource_id', '')
+              account_id = event.get('account_id', '')
+              resource_type = event.get('resource_type', '')
+              control_id = event.get('control_id', '')
+              table_name = event.get('ddb_table', '')
+              item = dict()
+              arn = get_resource_config_history(resource_type, resource_id)
+              logger.info(arn)
+              list_of_tags = get_resource_tags(arn, control_id)
+              logger.info(list_of_tags)
+              if list_of_tags:
+                  for tag in list_of_tags:
+                      logger.info(tag['Value'])
+                      item = get_item_by_uuid_and_type(table_name, tag['Value'], tag['Key'])
+                      logger.info(item)
+                  if item is None:
+                      logger.info("not valid tag exclusion, running auto remediation")
+                      return "NotExcluded"
+                  if str(account_id) in item['AccountId']:
+                      logger.info(f'excluding resource: {resource_id} on {account_id}')
+                      return "Excluded"
+                  else:
+                      logger.info("not valid exclusion, running auto remediation")
+                      return "NotExcluded"
+              else:
+                  logger.info(f'No tags on resource, {resource_id}')
+                  return "NotExcluded"
 
       LoggingConfig:
         LogGroup: !Ref LambdaLoggingGroup
@@ -198,6 +150,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - tag:GetResources
+                  - config:GetResourceConfigHistory
                 Resource: '*'
               - Effect: Allow
                 Action:
