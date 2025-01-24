@@ -11,11 +11,11 @@ Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
   # [EC2.14] Security groups should not allow ingress from 0.0.0.0/0 or ::/0 to port 3389
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
-  DisablePublicAccessForSecurityGroup:
+  SSMDocument:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessForSecurityGroup-WithTags
+      Name: FTA-DisablePublicAccessForSecurityGroup
       Content:
         description: >-
           ## Disable RDP ports opened to IP address specified,
@@ -25,21 +25,12 @@ Resources:
         schemaVersion: '0.3'
         assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
         parameters:
-          AwsService:
-            type: String
-            default: 'ec2'
           AccountId:
             type: String
             default: !Sub ${AWS::AccountId}
           ResourceType:
             type: String
-            default: 'security-group'
-          Region:
-            type: String
-            default: !Sub ${AWS::Region}
-          Partition:
-            type: String
-            default: "aws"
+            default: 'AWS::EC2::SecurityGroup'
           ControlId:
             type: String
             default: "EC2.14"
@@ -78,11 +69,8 @@ Resources:
               Payload: !Sub |
                 {
                   "account_id": ${AWS::AccountId},
-                  "aws_service": "{{AwsService}}",
-                  "region": "${AWS::Region}",
                   "resource_type": "{{ResourceType}}",
                   "resource_id": "{{GroupId}}",
-                  "partition": "{{Partition}}",
                   "control_id": "{{ControlId}}",
                   "ddb_table": "{{ExclusionTable}}"
                 }
@@ -185,5 +173,5 @@ Resources:
           ResourceValue:
             Value: RESOURCE_ID
       RetryAttemptSeconds: 30
-      TargetId: !Ref DisablePublicAccessForSecurityGroup
+      TargetId: !Ref SSMDocument
       TargetType: "SSM_DOCUMENT"
