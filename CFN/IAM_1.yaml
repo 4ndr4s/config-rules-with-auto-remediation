@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Config rule for SSH and RDP
+
+Parameters:
+  AutomationRoleName:
+    Type: String
+    Default: "FTA-ConfigAutoRemediation"
+    Description: role Name
+  excludePermissionBoundaryPolicy:
+    Type: String
+    Default: "true"
+    Description: "Boolean flag to exclude the evaluation of IAM policies used as permissions boundaries. If set to \u0027true\u0027, the rule will not include permissions boundaries in the evaluation. Otherwise, all IAM policies in scope are evaluated when value is set to \u0027false.\u0027 Default value is \u0027false\u0027."
+Conditions:
+  excludePermissionBoundaryPolicy: !Not
+    - !Equals
+      - ''
+      - !Ref excludePermissionBoundaryPolicy
+
+Resources:
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  # [EC2.14] Security groups should not allow ingress from 0.0.0.0/0 or ::/0 to port 3389
+  # -------------------------------------------------------------------------------------------------------------------------------------------------------
+  DeletePolicyWithAdminAccess:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Name: FTA-DetachIAMPoliciesWithAdminAccess
+      Content:
+        description: >-
+          ## This document detaches an AWS IAM Policy using the [DetachGroupPolicy](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachGroupPolicy.html), 
+          [DetachRolePolicy](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachRolePolicy.html) and 
+          [DetachUserPolicy](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachUserPolicy.html) 
+          APIs. Then it deletes the IAM policy using the [DeletePolicy](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeletePolicy.html) and 
+          [DeletePolicyVersion](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeletePolicyVersion.html) APIs.
+        schemaVersion: '0.3'
+        assumeRole: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        parameters:
+          AccountId:
+            type: String
+            default: !Sub ${AWS::AccountId}
+          ResourceType:
+            type: String
+            default: 'AWS::IAM::Policy'
+          ControlId:
+            type: String
+            default: "IAM.1"
+          AutomationAssumeRole:
+            type: String
+            default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+          PolicyId:
+            type: String
+            description: (Required) IAM resource unique identifier for the IAM Policy.
+          GetTagsLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+          GetInventoryLambda:
+            type: String
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+          ExclusionTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+          InventoryTable:
+            type: String
+            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+          QuickSightS3:
+            type: String
+            default: "quick-sight-report-exclusion-622c56"
+        mainSteps:
+          - action: 'aws:invokeLambdaFunction'
+            name: 'InvokeMyLambdaFunction'
+            inputs:
+              FunctionName: '{{GetTagsLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "resource_type": "{{ResourceType}}",
+                  "resource_id": "{{PolicyId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{ExclusionTable}}"
+                }
+          - name: LambdaOutputCheck
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: AWSConfigRemediation_DetachIAMPolicy
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "NotExcluded"
+              - NextStep: PublishExcludeLambda
+                Variable: "{{InvokeMyLambdaFunction.Payload}}"
+                StringEquals: "Excluded"
+              Default:
+                AWSConfigRemediation_DetachIAMPolicy
+          - name: PublishExcludeLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "excluded",
+                  "resource_id": "{{PolicyId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
+          - name: AWSConfigRemediation_DetachIAMPolicy
+            action: aws:executeAutomation
+            nextStep: AWSConfigRemediation_DeleteUnusedIAMPolicy
+            onFailure: Continue
+            inputs:
+              DocumentName: AWSConfigRemediation-DetachIAMPolicy
+              RuntimeParameters:
+                AutomationAssumeRole: '{{ AutomationAssumeRole }}'
+                IAMResourceId: '{{ PolicyId }}'
+          - name: AWSConfigRemediation_DeleteUnusedIAMPolicy
+            action: aws:executeAutomation
+            inputs:
+              DocumentName: AWSConfigRemediation-DeleteUnusedIAMPolicy
+              RuntimeParameters:
+                AutomationAssumeRole: '{{ AutomationAssumeRole }}'
+                IAMResourceId: '{{ PolicyId }}'
+          - name: PublishRemediationLambda
+            action: 'aws:invokeLambdaFunction'
+            inputs:
+              FunctionName: '{{GetInventoryLambda}}'
+              Payload: !Sub |
+                {
+                  "account_id": ${AWS::AccountId},
+                  "S3Bucket": "{{QuickSightS3}}",
+                  "region": "${AWS::Region}",
+                  "status": "remediated",
+                  "resource_id": "{{PolicyId}}",
+                  "control_id": "{{ControlId}}",
+                  "ddb_table": "{{InventoryTable}}"
+                }
+            isEnd: true
+  AWSConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: FTA-DetachIAMPolicyWithAdminAccess
+      Description: "Checks whether the default version of AWS Identity and Access Management (IAM) policies do not have administrator access. If any statement has \"Effect\": \"Allow\" with \"Action\": \"*\" over \"Resource\": \"*\", the rule is non-compliant."
+      InputParameters:
+        excludePermissionBoundaryPolicy: !If
+          - excludePermissionBoundaryPolicy
+          - !Ref excludePermissionBoundaryPolicy
+          - !Ref AWS::NoValue
+      Scope: 
+        ComplianceResourceTypes: 
+          - AWS::IAM::Policy
+      Source:
+          Owner: AWS
+          SourceIdentifier: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS
+  ConfigAutoremediation:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      Automatic: true
+      ConfigRuleName: !Ref AWSConfigRule
+      MaximumAutomaticAttempts: 3
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: 
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+        PolicyId:
+          ResourceValue:
+            Value: RESOURCE_ID
+      RetryAttemptSeconds: 30
+      TargetId: !Ref DeletePolicyWithAdminAccess
+      TargetType: "SSM_DOCUMENT"
