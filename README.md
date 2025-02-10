@@ -1,132 +1,246 @@
-# Org AWS config Rules
+# Org AWS Config Rules
 
-| :exclamation: Single Account Test          |
-|:---------------------------|
-| **In order to manually test a single rule in a single region follow AWS documentation https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_manage-rules.html. this is recommended before implementing the rule at Org Level.** |
+| :exclamation: Single Account Test |
+|:----------------------------------|
+| **To manually test a single rule in a single region, follow the AWS documentation [here](https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_manage-rules.html). This is recommended before implementing the rule at the Org Level.** |
 
-## Cloudformation template.
+## CloudFormation Template
 
-To enable an AWS Config rule with auto-remediation, please follow the steps below:
+To enable an AWS Config rule with auto-remediation, follow these steps:
 
-> 1. Create a New YAML File:
-    - copy [rule.yaml.template]() into a new YAML file. Use a filename that refers to the control ID.
-> 2. Access AWS Config Console:
+1. **Create a New YAML File:**
+    - Copy [rule.yaml.template]() into a new YAML file. Use a filename that refers to the control ID.
+2. **Access AWS Config Console:**
     - Sign in to the AWS Management Console and open the AWS Config console at [AWS Config Console](https://console.aws.amazon.com/config/).
-> 3.Select the Appropriate Region:
+3. **Select the Appropriate Region:**
     - Ensure that the region selector is set to a region that supports AWS Config rules. For a list of supported regions, refer to the AWS Config Regions and Endpoints in the Amazon Web Services General Reference.
-> 4. Add a New Rule:
+4. **Add a New Rule:**
     - In the left navigation, choose `Rules`.
     - On the Rules page, click `Add rule`.
-> 5. Specify Rule Type:
+5. **Specify Rule Type:**
     - On the Specify rule type page, filter the list of managed rules by typing in the search field. For example, type EC2 to find rules that evaluate EC2 resource types or periodic for rules that are triggered periodically.
-> 6. Configure the Rule:
-    - On the Configure rule page, copy the Managed rule name (e.g., RDS_INSTANCE_PUBLIC_ACCESS_CHECK). You will need this to replace <REPLACE-CONFIG-RULE-SOURCE> in your new YAML file.
-    - For Name, provide a unique name for the rule and replace it in the new YAML file on line [ConfigRuleName](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L18).
+6. **Configure the Rule:**
+    - On the Configure rule page, copy the Managed rule name (e.g., RDS_INSTANCE_PUBLIC_ACCESS_CHECK). You will need this to replace `<REPLACE-CONFIG-RULE-SOURCE>` in your new YAML file.
+    - For Name, provide a unique name for the rule and replace it in the new YAML file on line [ConfigRuleName]().
     - For Description, add a description for the rule.
-    - Each rule has different properties and input parameters. To identify these, use the S3 template link, replace THE_RULE_IDENTIFIER with Managed rule name http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/THE_RULE_IDENTIFIER.template. For example: http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/RDS_INSTANCE_PUBLIC_ACCESS_CHECK.template. replace [ComplianceResourceTypes](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L18) with the required scope for the rule.
+    - Each rule has different properties and input parameters. To identify these, use the S3 template link, replace THE_RULE_IDENTIFIER with the Managed rule name: `http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/THE_RULE_IDENTIFIER.template`. For example: `http://s3.amazonaws.com/aws-configservice-us-east-1/cloudformation-templates-for-managed-rules/RDS_INSTANCE_PUBLIC_ACCESS_CHECK.template`. Replace [ComplianceResourceTypes]() with the required scope for the rule.
 
-### Default Parameters:
-| :exclamation: NOTE          |
-|:---------------------------|
+### Default Parameters
+
+| :exclamation: NOTE |
+|:-------------------|
 | **No changes are needed for these parameters.** |
 
-```
-          AccountId:
-            type: String
-            default: !Sub ${AWS::AccountId}
-          Region:
-            type: String
-            default: !Sub ${AWS::Region}
-          Partition:
-            type: String
-            default: "aws" < It may required to be change in the future if we are deployin on China or Gov regions.
-          AutomationAssumeRole:
-            type: String
-            default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
-          GetTagsLambda:
-            type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
-          GetInventoryLambda:
-            type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
-          ExclusionTable:
-            type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
-          InventoryTable:
-            type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
-          QuickSightS3:
-            type: String
-            default: "quick-sight-report-exclusion-622c56"
+```yaml
+AccountId:
+  type: String
+  default: !Sub ${AWS::AccountId}
+Region:
+  type: String
+  default: !Sub ${AWS::Region}
+Partition:
+  type: String
+  default: "aws" # It may need to be changed in the future if deploying in China or Gov regions.
+AutomationAssumeRole:
+  type: String
+  default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
+GetTagsLambda:
+  type: String
+  default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GetTagsbyResource"
+GetInventoryLambda:
+  type: String
+  default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GetAccountInventory"
+ExclusionTable:
+  type: String
+  default: !Ref ResourceExclussionTable
+InventoryTable:
+  type: String
+  default: !Ref AccountInventoryTable
+QuickSightS3:
+  type: String
+  default: !Ref SecToolingS3QuickSightBucket
 ```
 
-### Rule parameters
-| :exclamation: NOTE          |
-|:---------------------------|
+### Rule Parameters
+
+| :exclamation: NOTE |
+|:-------------------|
 | **Parameters such as GroupId or DBInstance depend on the type of rule you are deploying. These need to be added in multiple places.** |
 
 ### Auto Remediation
 
-To enable auto-remediation, please follow the steps outlined below:
+To enable auto-remediation, follow these steps:
 
-> 1. For every new auto-remediation action that will execute on a resource not covered by any previous rules, it is mandatory to update the auto-remediation role (FTA-ConfigAutoRemediation). This change must be made in the [iam.yaml](https://gitlab.fortra.com/cloudops/awsadmin/security/fortra_org_roles/-/blob/main/ORG_CFN/iam.yaml?ref_type=heads#L265)
-> 2. Sign in to the AWS Management Console and open the AWS Config console at https://console.aws.amazon.com/systems-manager/.
-3. Execute Automation:
+1. **Update Auto-Remediation Role:**
+    - For every new auto-remediation action that will execute on a resource not covered by any previous rules, update the auto-remediation role (ConfigAutoRemediation) in the [iam.yaml]().
+2. **Sign in to the AWS Management Console:**
+    - Open the AWS Config console at [AWS Config Console](https://console.aws.amazon.com/systems-manager/).
+3. **Execute Automation:**
     - In the left navigation menu, click on Automation under Change Management.
     - Click on Execute Automation.
-> 4. Filter Automation Runbook:
+4. **Filter Automation Runbook:**
     - In the Automation runbook search bar, filter by the document required for your Config Rule.
-    - Copy the necessary content into the new YAML file under the [content](https://gitlab.fortra.com/cloudops/awsadmin/security/aws-config/org-aws-config-rules/-/blob/main/CFN/rule.yaml.template?ref_type=heads#L19) section.
-> 5. Define Mandatory Actions:
+    - Copy the necessary content into the new YAML file under the [content]() section.
+5. **Define Mandatory Actions:**
     - Under the mainsteps block, include the following mandatory actions:
-        - InvokeMyLambdaFunction: This Lambda function retrieves resource tags and returns either `Excluded` or `NotExcluded` as output.
-        - LambdaOutputCheck: This Lambda function determines the next steps based on the input from `InvokeMyLambdaFunction`.
-        - PublishExcludeLambda: This Lambda function publishes the resource information to the excluded folder in S3.
-        - PublishRemediationLambda: This Lambda function publishes the resource information to the remediated folder in S3.
+        - `InvokeMyLambdaFunction`: This Lambda function retrieves resource tags and returns either `Excluded` or `NotExcluded` as output.
+        - `LambdaOutputCheck`: This Lambda function determines the next steps based on the input from `InvokeMyLambdaFunction`.
+        - `PublishExcludeLambda`: This Lambda function publishes the resource information to the excluded folder in S3.
+        - `PublishRemediationLambda`: This Lambda function publishes the resource information to the remediated folder in S3.
 
-### specific parameters
-| :exclamation: NOTE          |
-|:---------------------------|
-| **Parameters described below need to be updated based on each rule** |
+### Specific Parameters
 
-> 1. `AwsService` Needs to match the service portion of the resource ARN [ARN format](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html)
-> 2. `ResourceType` Needs to match the resource-type portion of the resource ARN, there are some resources that do not use resource-type, leave empty if not required [Resource Types](https://docs.aws.amazon.com/service-authorization/latest/reference/reference_policies_actions-resources-contextkeys.html)
-> 3. `ControlId` Needs to match the control that needs to be remediated
-> 4. `ResourceId` ResourceId that is going to be remediated, this will depends of the rule we are implementing, it will change across the rules.
-```
-    AwsService:
-        type: String
-        default: 'ec2'
-    ResourceType:
-        type: String
-        default: 'security-group'
-    ControlId:
-        type: String
-        default: "EC2.14"
-    ResourceId:
-        type: String
-        description: (Required) Security Group ID
-        allowedPattern: ^([s][g]\-)([0-9a-f]){1,}$
+| :exclamation: NOTE |
+|:-------------------|
+| **Parameters described below need to be updated based on each rule.** |
+
+1. **ResourceType:**
+    - Needs to match the resource-type portion of the resource ARN. Some resources do not use resource-type, leave empty if not required. Refer to [Resource Types](https://docs.aws.amazon.com/service-authorization/latest/reference/reference_policies_actions-resources-contextkeys.html).
+2. **ControlId:**
+    - Needs to match the control that needs to be remediated.
+3. **ResourceId:**
+    - ResourceId that is going to be remediated. This will depend on the rule being implemented and will change across rules.
+
+```yaml
+ResourceType:
+  type: String
+  default: 'AWS::EC2::SecurityGroup'
+ControlId:
+  type: String
+  default: "EC2.14"
+ResourceId:
+  type: String
+  description: (Required) Security Group ID
+  allowedPattern: ^([s][g]\-)([0-9a-f]){1,}$
 ```
 
 ### LambdaOutputCheck
-| :exclamation: NOTE          |
-|:---------------------------|
+
+| :exclamation: NOTE |
+|:-------------------|
 | **You must update the `NextSteps` and default behavior of this action as described below:** |
 
-```
+```yaml
 - name: LambdaOutputCheck
   action: aws:branch
   inputs:
     Choices:
-    - NextStep: <Action when is resource is not excluded and needs to be remediated>
+    - NextStep: <Action when the resource is not excluded and needs to be remediated>
       Variable: "{{InvokeMyLambdaFunction.Payload}}"
       StringEquals: "NotExcluded"
-    - NextStep: <Action when is resource is excluded>
+    - NextStep: <Action when the resource is excluded>
       Variable: "{{InvokeMyLambdaFunction.Payload}}"
       StringEquals: "Excluded"
     Default:
       <Default action>
+```
+
+## DynamoDB Tables
+
+### Inventory DynamoDB Table
+
+Contains relevant information that will be useful in the QuickSight report dashboard.
+
+```json
+{
+  "AccountId": {
+    "S": "1234567890"
+  },
+  "AccountName": {
+    "S": "Account Name"
+  },
+  "Brand": {
+    "S": "<or Application>"
+  },
+  "Org_ID": {
+    "S": "ou-organization-id"
+  },
+  "OUType": {
+    "S": "Prod"
+  },
+  "RootEmail": {
+    "S": "test@example.com"
+  }
+}
+```
+
+### Exclusion DynamoDB Table
+
+Contains the resources that are excluded from the auto-remediation rules. Items that match resource information across the organization are excluded from being remediated.
+
+- `UUID`: Unique identifier to identify resources to be excluded.
+- `Type`: Needs to match the Security Hub control ID of the resource that needs to be excluded.
+- `AccountId`: AccountId where resource(s) exist, could be a single account or list depending on the Security Hub suppression rule.
+- `ResourceIdentifier`: Resource ID to identify the resource that needs to be excluded (only for reporting purposes).
+
+```json
+{
+  "UUID": {
+    "S": "TEST-2bd-6ac7-xyz8-a7cb-44f6c9b21197"
+  },
+  "Type": {
+    "S": "RDS.2"
+  },
+  "AccountId": {
+    "L": [
+      {
+        "S": "1234567890"
+      },
+      {
+        "S": "01234561782"
+      },
+      {
+        "S": "7281289120120"
+      },
+      {
+        "S": "7012919120193"
+      }
+    ]
+  },
+  "ResourceIdentifier": {
+    "S": "db-database-identified"
+  }
+}
+```
+
+## Resources to be Excluded
+
+To exclude a resource, you MUST add a tag as described below to the resource that requires the exclusion.
+
+- **Tag Key:** Needs to be equal to Type (e.g., S3.8).
+- **Tag Value:** Needs to be equal to UUID (e.g., TEST-2bd-6ac7-xyz8-a7cb-44f6c9b21197).
+
+Once the tag is added to the resource, when the AWS Config rule is triggered, the `InvokeMyLambdaFunction` will run and return `Excluded`, and the resource will be excluded from the auto-remediation actions.
+
+## Terraform Infrastructure (Optional)
+
+Terraform modules and source folder deploy a Step Function that is used as a solution to manage stacksets when regions are dynamic across the organization. This Step Function reads a DynamoDB table that is not being created in this repository but looks like the one described below. The `AccountId` is the Partition Key.
+
+```json
+{
+  "AccountId": {
+    "S": "1234567890"
+  },
+  "Regions": {
+    "L": [
+      {
+        "S": "us-east-2"
+      },
+      {
+        "S": "us-east-1"
+      },
+      {
+        "S": "us-west-2"
+      },
+      {
+        "S": "eu-central-1"
+      },
+      {
+        "S": "eu-west-1"
+      }
+    ]
+  }
+}
 ```
 
 ## Useful Documents

@@ -1,12 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to create lambda function that will be trigger as part of Aws Config Auto remediation Action
-
+Parameters:
+  ResourceExclussionTable:
+    Type: String
+    Description: The name of the DynamoDB table
 Resources:
   # Define the Lambda function
   MyLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: FTA-GetTagsbyResource
+      FunctionName: GetTagsbyResource
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -122,7 +125,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupClass: STANDARD
-      LogGroupName: !Sub /aws/lambda/FTA-GetTagsbyResources-${AWS::Region}
+      LogGroupName: !Sub /aws/lambda/GetTagsbyResources-${AWS::Region}
       RetentionInDays: 30
 
   LambdaExecutionRole:
@@ -137,7 +140,7 @@ Resources:
             Action: sts:AssumeRole
           - Effect: Allow
             Principal: 
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/FTA-ConfigAutoRemediation
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/ConfigAutoRemediationRole
             Action: sts:AssumeRole
       Policies:
         - PolicyName: LambdaBasicExecution
@@ -159,4 +162,4 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                Resource: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+                Resource: !Ref ResourceExclussionTable

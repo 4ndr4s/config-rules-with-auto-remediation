@@ -3,35 +3,35 @@ variable "aws_region" {
 }
 
 variable "solution_name" {
-  default = "FTA-CFN-StackSet-Deployment"
+  default = "CFN-StackSet-Deployment"
 }
 variable "bucket_name" {
-  default = "scp-region-restriction-aaae72"
+  default = "bucket Name"
 }
 variable "tags" {
   type        = map(any)
   description = "An object of tag key value pairs"
   default = {
-    solution-name = "FortraCloudFormationStackSetDeployment"
+    solution-name = "CloudFormationStackSetDeployment"
   }
 }
 variable "SCPdynamoDB" {
-  default = "scp-region-restriction-75032c"
+  default = "dynamoDB table that stores regions per account"
 }
 variable "trusted_role_arn" {
-  default = "FTA-Execute-Operations-Role"
+  default = "Execute-Operations-Role"
 }
 variable "SecurityToolingAccountId" {
   default = 412090077236
 }
 variable "template_url" {
-  default = "https://s3.amazonaws.com/fta-cloudformation-templates-us-east-1/aws-org-config-rules/base.yaml"
+  default = "https://s3.amazonaws.com/<bucket name>/aws-org-config-rules/base.yaml"
 
 }
 variable "stack_set_name" {
-  default = "FTA-AWS-Config-Rules"
+  default = "AWS-Config-Rules"
 
 }
 variable "SecTooling_DDB_Role_Arn" {
-  default = "arn:aws:iam::412090077236:role/FTA-DynamoDB-For-CloudOps-IaC"
+  default = "<Role ARN to read DDB table to get acounts and regions>"
 }

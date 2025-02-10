@@ -4,43 +4,94 @@ Description: AWS Config rules
 Parameters:
   cfnTemplatesBucketURL:
     Type: String
-    Default: "https://s3.amazonaws.com/fta-cloudformation-templates-us-east-1"
+    Default: "https://s3.amazonaws.com/<bucket name>"
     Description: S3 Bucket URL containing CFN templates e.g. https://<name>.s3.amazonaws.com/<AWS_REGION>/<VERSION>
+  ExclussionTableARN:
+    Type: String
+    Description: Exclussion DDB table name
+    Default: "arn:aws:dynamodb:us-east-1:<SecAccountID>:table/Resource-Tags-Exclusion-auto-remediation-ddb-stack-us-east-1"
+  AccountInventoryTableARN:
+    Type: String
+    Description: Account Inventory DDB table name
+    Default: "arn:aws:dynamodb:us-east-1:<SecAccountID>:table/Account-Inventory-auto-remediation-ddb-stack-us-east-1"
+  SecToolingS3QuickSightBucket:
+    Type: String
+    Description: Name of Quick Sight S3 bucket for Security Tooling
+    Default: "this-is-not-an-s3-bucket-7475d9"
 
 Resources:
-
-  cfnStackLambdaGetTags:
+  cfnStackIAMRole:
     Type: AWS::CloudFormation::Stack
     Properties:
+      TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "IAM.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
+      TimeoutInMinutes: 10
+  cfnStackLambdaGetTags:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
+    Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "GetTagsLambda.yaml"] ]
+      Parameters:
+        ResourceExclussionTable: !Ref ExclussionTableARN
       TimeoutInMinutes: 10
   cfnStackLambdaGetInventory:
     Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "GetAccountInventoryLambda.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
       TimeoutInMinutes: 10
   cfnStackRDSTwo:
     Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "RDS_2.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        ResourceExclussionTable: !Ref ExclussionTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
       TimeoutInMinutes: 10
   cfnStacklambdaOne:
     Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "Lambda_1.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        ResourceExclussionTable: !Ref ExclussionTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
       TimeoutInMinutes: 10
   cfnStackEC2Fourteen:
     Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "EC2_14.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        ResourceExclussionTable: !Ref ExclussionTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
       TimeoutInMinutes: 10
   cfnStackRDSOne:
     Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "RDS_1.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        ResourceExclussionTable: !Ref ExclussionTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
       TimeoutInMinutes: 10
   cfnStackIAMOne:
     Type: AWS::CloudFormation::Stack
+    DependsOn: cfnStackIAMRole
     Properties:
       TemplateURL: !Join [ "/", [ !Ref cfnTemplatesBucketURL, "aws-org-config-rules",  "IAM_1.yaml"] ]
+      Parameters:
+        AccountInventoryTable: !Ref AccountInventoryTableARN
+        ResourceExclussionTable: !Ref ExclussionTableARN
+        SecToolingS3QuickSightBucket: !Ref SecToolingS3QuickSightBucket
       TimeoutInMinutes: 10

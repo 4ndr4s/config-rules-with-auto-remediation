@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create a DynamoDB table
+
+Resources:
+  AccountInventoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Account-Inventory-${AWS::StackName}-${AWS::Region}"
+      AttributeDefinitions:
+        - AttributeName: AccountId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: AccountId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Name
+          Value: "Account-Inventory-Table"
+
+  ResourceExclusionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Resource-Tags-Exclusion-${AWS::StackName}-${AWS::Region}"
+      AttributeDefinitions:
+        - AttributeName: UUID
+          AttributeType: S
+        - AttributeName: Type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: UUID
+          KeyType: HASH
+        - AttributeName: Type
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: false  # Set to true if you want to enable TTL
+      Tags:
+        - Key: Name
+          Value: "Resource-Tags-Exclusion-Table"
+
+Outputs:
+  ExclusionTableName:
+    Description: "The name of the DynamoDB table"
+    Value: !Ref ResourceExclusionTable
+
+  InventoryTableName:
+    Description: "The name of the Account Inventory DynamoDB table"
+    Value: !Ref AccountInventoryTable

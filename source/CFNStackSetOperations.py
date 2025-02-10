@@ -38,7 +38,7 @@ def create_stack_set(client, stack_set, template):
             TemplateURL=template,
             Tags=[
                 {
-                    'Key': 'FTA-Project',
+                    'Key': 'Project',
                     'Value': 'AWSConfigRules'
                 },
             ],
@@ -87,7 +87,7 @@ def update_stack_set(client, stack_set, template):
             CallAs='SELF',
             Tags=[
                 {
-                    'Key': 'FTA-Project',
+                    'Key': 'Project',
                     'Value': 'AWSConfigRules'
                 },
             ],

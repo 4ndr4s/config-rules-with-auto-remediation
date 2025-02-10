@@ -4,8 +4,19 @@ Description: AWS Config rule for SSH and RDP
 Parameters:
   AutomationRoleName:
     Type: String
-    Default: "FTA-ConfigAutoRemediation"
+    Default: "ConfigAutoRemediationRole"
     Description: role Name
+  AccountInventoryTable:
+    Type: String
+    Description: The name of the DynamoDB table
+  ResourceExclussionTable:
+    Type: String
+    Description: The name of the DynamoDB table
+  SecToolingS3QuickSightBucket:
+    Type: String
+    Description: Name of Quick Sight S3 bucket for Security Tooling
+  
+  
 
 Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -15,7 +26,7 @@ Resources:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessToRDSInstances
+      Name: DisablePublicAccessToRDSInstances
       Content:
         description: >-
           ### Document name - AWSConfigRemediation-DisablePublicAccessToRDSInstance
@@ -52,19 +63,19 @@ Resources:
             default: "RDS.2"
           GetTagsLambda:
             type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GetTagsbyResource"
           GetInventoryLambda:
             type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GetAccountInventory"
           ExclusionTable:
             type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+            default: !Ref ResourceExclussionTable
           InventoryTable:
             type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+            default: !Ref AccountInventoryTable
           QuickSightS3:
             type: String
-            default: "quick-sight-report-exclusion-622c56"
+            default: !Ref SecToolingS3QuickSightBucket
         outputs:
           - DisablePubliclyAccessibleOnRDS.Response
         mainSteps:
@@ -225,7 +236,7 @@ Resources:
   AWSConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: FTA-RDSInstancePublicAccessCheck
+      ConfigRuleName: RDSInstancePublicAccessCheck
       Description: Checks if the Amazon Relational Database Service (Amazon RDS) instances are not publicly accessible. The rule is NON_COMPLIANT if the publiclyAccessible field is true in the instance configuration item.
       Scope: 
         ComplianceResourceTypes: 

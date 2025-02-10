@@ -4,8 +4,17 @@ Description: AWS Config rule for SSH and RDP
 Parameters:
   AutomationRoleName:
     Type: String
-    Default: "FTA-ConfigAutoRemediation"
+    Default: "ConfigAutoRemediationRole"
     Description: role Name
+  AccountInventoryTable:
+    Type: String
+    Description: The name of the DynamoDB table
+  ResourceExclussionTable:
+    Type: String
+    Description: The name of the DynamoDB table
+  SecToolingS3QuickSightBucket:
+    Type: String
+    Description: Name of Quick Sight S3 bucket for Security Tooling
 
 Resources:
   # -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -16,10 +25,10 @@ Resources:
     Properties:
       UpdateMethod: NewVersion
       DocumentType: Automation
-      Name: FTA-DisablePublicAccessToRDSSnapshot
+      Name: DisablePublicAccessToRDSSnapshot
       Content:
         description: >-
-          ### Document name - FTA-DisablePublicAccessToRDSSnapshot
+          ### Document name - DisablePublicAccessToRDSSnapshot
 
           ## What does this document do?
           The AWSSupport-ModifyRDSSnapshotPermission document will allow to automatically modify permissions of multiple RDS snapshots from Public to Private
@@ -51,19 +60,19 @@ Resources:
             default: "RDS.1"
           GetTagsLambda:
             type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetTagsbyResource"
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GetTagsbyResource"
           GetInventoryLambda:
             type: String
-            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:FTA-GetAccountInventory"
+            default: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GetAccountInventory"
           ExclusionTable:
             type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-resource-tags-exclusion-5d9747"
+            default: !Ref ResourceExclussionTable
           InventoryTable:
             type: String
-            default: "arn:aws:dynamodb:us-east-1:412090077236:table/FTA-Account-Inventory-f74cd8"
+            default: !Ref AccountInventoryTable
           QuickSightS3:
             type: String
-            default: "quick-sight-report-exclusion-622c56"
+            default: !Ref SecToolingS3QuickSightBucket
         mainSteps:
           - name: 'InvokeMyLambdaFunction'
             action: 'aws:invokeLambdaFunction'
@@ -132,7 +141,7 @@ Resources:
   AWSConfigRuleDB:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: FTA-RDSDBSnapshotsPublicProhibited
+      ConfigRuleName: RDSDBSnapshotsPublicProhibited
       Description: Checks if Amazon Relational Database Service (Amazon RDS) snapshots are public. The rule is non-compliant if any existing and new Amazon RDS snapshots are public.
       Scope: 
         ComplianceResourceTypes:
@@ -164,7 +173,7 @@ Resources:
   AWSConfigRuleCluster:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: FTA-RDSClusterSnapshotsPublicProhibited
+      ConfigRuleName: RDSClusterSnapshotsPublicProhibited
       Description: Checks if Amazon Relational Database Service (Amazon RDS) snapshots are public. The rule is non-compliant if any existing and new Amazon RDS snapshots are public.
       Scope: 
         ComplianceResourceTypes:

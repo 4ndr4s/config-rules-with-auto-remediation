@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ConfigRemediationRoleName:
+    Type: String
+    Default: "ConfigAutoRemediationRole"
+    Description: Name of IAM Role for Config remediation
+  AccountInventoryTable:
+    Type: String
+    Description: The name of the DynamoDB table
+  SecToolingS3QuickSightBucket:
+    Type: String
+    Description: Name of Quick Sight S3 bucket for Security Tooling
+  IAMRolePath:
+    Type: String
+    Default: "/"
+    Description: Path for IAM Role
+
+Resources: 
+  ConfigRemediationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role to be assumed by SSM Documents to auto remediate AWS Config rule findings in target accounts.
+      RoleName: !Ref ConfigRemediationRoleName
+      Path: !Ref IAMRolePath
+      Policies:
+          - PolicyName: !Sub '${ConfigRemediationRoleName}-policy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Sid: EC2Permissions
+                  Effect: Allow
+                  Action:
+                    - ec2:RevokeSecurityGroupIngress
+                    - ec2:StopInstances
+                    - ec2:DescribeInstanceStatus
+                  Resource: "*"
+                - Sid: RDSPermissions
+                  Effect: Allow
+                  Action:
+                    - rds:DescribeDBInstances
+                    - rds:ModifyDBInstance
+                    - rds:ModifyDBSnapshotAttribute
+                    - rds:ModifyDBClusterSnapshotAttribute
+                  Resource: "*"
+                - Sid: LambdaPublicPolicy
+                  Effect: Allow
+                  Action:
+                    - lambda:GetPolicy
+                    - lambda:RemovePermission
+                    - lambda:AddPermission
+                  Resource: "*"
+                - Sid: LambdaInvokePolicy
+                  Effect: Allow
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource:
+                    - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:GetTagsbyResource" 
+                    - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:GetAccountInventory"
+                - Sid: S3SecToolingPermissions
+                  Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                    - s3:PutObject
+                  Resource: 
+                    - !Sub "arn:aws:s3:::${SecToolingS3QuickSightBucket}/*"
+                    - !Sub "arn:aws:s3:::${SecToolingS3QuickSightBucket}"
+                - Sid: SNSPublishPolicy
+                  Effect: Allow
+                  Action:
+                    - SNS:Publish
+                  Resource: "*" ## define the ARN of the SNS topic arn:aws:sns:us-east-1:<AccountID>:Sec-Tooling-SNS-topic
+                - Sid: DDBPolicy
+                  Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                  Resource: !Ref AccountInventoryTable
+                - Sid: IamActions
+                  Effect: Allow
+                  Action:
+                    - iam:GetPolicy
+                    - iam:ListEntitiesForPolicy
+                    - iam:ListPolicyVersions
+                    - iam:DeletePolicy
+                    - iam:DeletePolicyVersion
+                    - iam:DetachGroupPolicy
+                    - iam:DetachRolePolicy
+                    - iam:DetachUserPolicy
+                  Resource: "*"
+                - Sid: ConfigActions
+                  Effect: Allow
+                  Action:
+                    - config:GetResourceConfigHistory
+                  Resource: "*"
+                - Sid: SSMActions
+                  Effect: Allow
+                  Action:
+                    - ssm:StartAutomationExecution
+                    - ssm:GetAutomationExecution
+                    - ssm:StartChangeRequestExecution
+                  Resource: "*"
+                - Sid: IamPassRole
+                  Effect: Allow
+                  Action:
+                    - iam:PassRole
+                  Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role/ConfigAutoRemediation"
+      AssumeRolePolicyDocument:
+        #add trust policy here
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              "Service": "ssm.amazonaws.com"
+            Action: sts:AssumeRole
+      Tags:
+        - Key: "Name"
+          Value: !Ref ConfigRemediationRoleName
