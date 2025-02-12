@@ -11,7 +11,7 @@ Parameters:
     Description: "The name of the Administrator role. Defaults to 'AWSCloudFormationStackSetAdministrationRole'."
   CFNDelegatedAdministrator:
     Type: String
-    Default: "703671934534"
+    Default: "12345678901"
     Description: 12 digit account id of SecurityHub Administrator account
 
 Resources: 
