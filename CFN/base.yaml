@@ -17,7 +17,7 @@ Parameters:
   SecToolingS3QuickSightBucket:
     Type: String
     Description: Name of Quick Sight S3 bucket for Security Tooling
-    Default: "this-is-not-an-s3-bucket-7475d9"
+    Default: "<bucket name>"
 
 Resources:
   cfnStackIAMRole:

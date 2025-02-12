@@ -8,21 +8,43 @@
 
 To enable an AWS Config rule with auto-remediation, follow these steps:
 
-1. **Deploy DynamoDB Tables:**
-    - Deploy the CloudFormation stack using [security_base.yaml](https://github.com/4ndr4s/config-rules-with-auto-remediation/blob/main/CFN/security_base.yaml). This stack will create two DynamoDB tables used by the auto-remediation solution.
+1. **Required Roles:**
+    - To deploy this solution, there are two required roles by CloudFormation to create stack sets. Use the `CFN_IAM.yaml` template and follow [these instructions](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-associate-stackset-with-org.html#stacksets-orgs-associate-stackset-with-org-console).
 
-2. **Create a New YAML File:**
+2. **Deploy DynamoDB Tables:**
+    - Deploy the CloudFormation stack using [security_base.yaml](https://github.com/4ndr4s/config-rules-with-auto-remediation/blob/main/CFN/security_base.yaml) following [these instructions](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html#create-stack). This stack will create two DynamoDB tables used by the auto-remediation solution.
+
+3. **Deploy Self-Managed Stack Set:**
+    - To deploy a self-managed stack set with current auto-remediation rules, follow [these instructions](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-getting-started-create-self-managed.html#stacksets-getting-started-create-self-managed-console).
+
+    ![AWSCloudFormationStackSetRoles](images/AWSCFNRoles.png)
+
+    ![Parameters](images/Parameters.png)
+
+    ![Deployment Options](images/DeploymentOptions.png)
+
+    - Replace parameters as described below:
+      - `AccountInventoryTableARN`: Database ARN from Step 2
+      - `ExclussionTableARN`: Database ARN from Step 2
+      - `SecToolingS3QuickSightBucket`: Quicksight bucket to store auto-remediation reports
+      - `cfnTemplatesBucketURL`: S3 bucket to store CFN templates.
+
+| :exclamation: NOTE |
+|:-------------------|
+| **The bucket described in [base.yaml](https://github.com/4ndr4s/config-rules-with-auto-remediation/blob/main/CFN/base.yaml#L5) needs to be accessible from your organization principal.** |
+
+4. **Create a New YAML File:**
     - Copy [rule.yaml.template]() into a new YAML file. Use a filename that refers to the control ID.
-3. **Access AWS Config Console:**
+5. **Access AWS Config Console:**
     - Sign in to the AWS Management Console and open the AWS Config console at [AWS Config Console](https://console.aws.amazon.com/config/).
-4. **Select the Appropriate Region:**
+6. **Select the Appropriate Region:**
     - Ensure that the region selector is set to a region that supports AWS Config rules. For a list of supported regions, refer to the AWS Config Regions and Endpoints in the Amazon Web Services General Reference.
-5. **Add a New Rule:**
+7. **Add a New Rule:**
     - In the left navigation, choose `Rules`.
     - On the Rules page, click `Add rule`.
-6. **Specify Rule Type:**
+8. **Specify Rule Type:**
     - On the Specify rule type page, filter the list of managed rules by typing in the search field. For example, type EC2 to find rules that evaluate EC2 resource types or periodic for rules that are triggered periodically.
-7. **Configure the Rule:**
+9. **Configure the Rule:**
     - On the Configure rule page, copy the Managed rule name (e.g., RDS_INSTANCE_PUBLIC_ACCESS_CHECK). You will need this to replace `<REPLACE-CONFIG-RULE-SOURCE>` in your new YAML file.
     - For Name, provide a unique name for the rule and replace it in the new YAML file on line [ConfigRuleName](https://github.com/4ndr4s/config-rules-with-auto-remediation/blob/main/CFN/rule.yaml.template#L169).
     - For Description, add a description for the rule.
@@ -38,12 +60,6 @@ To enable an AWS Config rule with auto-remediation, follow these steps:
 AccountId:
   type: String
   default: !Sub ${AWS::AccountId}
-Region:
-  type: String
-  default: !Sub ${AWS::Region}
-Partition:
-  type: String
-  default: "aws" # It may need to be changed in the future if deploying in China or Gov regions.
 AutomationAssumeRole:
   type: String
   default: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AutomationRoleName}'
@@ -217,7 +233,7 @@ Once the tag is added to the resource, when the AWS Config rule is triggered, th
 
 ## Terraform Infrastructure (Optional)
 
-Terraform modules and [source](https://github.com/4ndr4s/config-rules-with-auto-remediation/tree/main/source) folder deploy a Step Function that is used as a solution to manage stacksets when regions are dynamic across the organization. This Step Function reads a DynamoDB table that is not being created in this repository but looks like the one described below. The `AccountId` is the Partition Key.
+Terraform modules and [source](https://github.com/4ndr4s/config-rules-with-auto-remediation/tree/main/source) folders deploy a Step Function that is used as a solution to manage stacksets when regions are dynamic across the organization. This Step Function reads a DynamoDB table that is not being created in this repository but looks like the one described below. The `AccountId` is the Partition Key.
 
 ```json
 {
