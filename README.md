@@ -168,7 +168,7 @@ cfnStack<CONTROL_ID>:
     TimeoutInMinutes: 10
 ```
 
-Then update the stack set described in [step 3](#CloudFormation Template).
+Then update the stack set described in [step 3](#cloudFormation-template).
 
 ## DynamoDB Tables
 
