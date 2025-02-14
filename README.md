@@ -168,7 +168,7 @@ cfnStack<CONTROL_ID>:
     TimeoutInMinutes: 10
 ```
 
-Then update the stack set described in [Deploy Self-Managed Stack Set](#Deploy Self-Managed Stack Set).
+Then update the stack set described in [Deploy Self-Managed Stack Set](3. **Deploy Self-Managed Stack Set:**).
 
 ## DynamoDB Tables
 
